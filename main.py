@@ -8,7 +8,7 @@ from monitoring.process_monitor import ProcessMonitor
 from security.file_monitor import FileMonitor
 from api.server import run_api_server
 from cli.cli import start_cli
-
+ 
 def main():
     logger = Logger()
     scanner = NetworkScanner()
