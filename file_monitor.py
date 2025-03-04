@@ -20,7 +20,7 @@ class FileMonitor:
             with open(path, "rb") as f:
                 buf = f.read()
                 hasher.update(buf)
-        except FileNotFoundError:
+        except FileNotFoundError: 
             return None
         return hasher.hexdigest()
 
