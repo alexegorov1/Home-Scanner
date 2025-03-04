@@ -2,7 +2,7 @@ import socket
 import random
 
 class NetworkScanner:
-    def __init__(self, target="192.168.1.1"):
+    def __init__(self, target="*****"):
         self.target = target
         self.potential_threats = [
             "Brute Force Attack",
