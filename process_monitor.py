@@ -12,4 +12,4 @@ class ProcessMonitor:
                     suspicious_processes.append(f"Suspicious process: {proc.info['name']} (PID {proc.info['pid']})")
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
-        return suspicious_processes
+        return suspicious_processes 
