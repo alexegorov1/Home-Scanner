@@ -1,5 +1,4 @@
-SentinelGuard Pro Max
-SentinelGuard Pro Max is a security monitoring system designed to keep an eye on network activity, analyze logs for anomalies, detect suspicious processes, track file modifications, and manage security incidents. It also includes an API server for logging and retrieving incidents.
+Home-Scanner is a security monitoring system designed to keep an eye on network activity, analyze logs for anomalies, detect suspicious processes, track file modifications, and manage security incidents. It also includes an API server for logging and retrieving incidents.
 
 This thing is built to run continuously, scanning for threats and flagging anything shady. It monitors the system, logs suspicious behavior, and fires off alerts when something looks off. Whether it's network intrusions, sketchy logs, or unauthorized file changes, it watches everything and keeps a record of incidents.
 
@@ -8,7 +7,7 @@ The main script fires up several key components. The NetworkScanner checks for o
 
 The system runs in an infinite loop, checking for new threats every minute. If something nasty is detected, it gets logged, an alert is fired off, and the incident is stored in the database. The API lets you access these incidents through a simple HTTP request. There's also a CLI for interacting with the system manually.
 
-Components
+Components:
 Network Scanner
 The scanner sweeps the network for open ports and potential intrusions. It detects common attack vectors like brute force attempts, SQL injections, and unauthorized access. If an open port is found, it randomly assigns a potential threat from a predefined list.
 
