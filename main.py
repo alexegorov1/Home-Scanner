@@ -6,17 +6,19 @@ from core.alerts import AlertManager
 from core.database import IncidentDatabase
 from monitoring.process_monitor import ProcessMonitor
 from security.file_monitor import FileMonitor
+from system.uptime_monitor import UptimeMonitor
 from api.server import run_api_server
 from cli.cli import start_cli
 
 def main():
     logger = Logger()
-    scanner = NetworkScanner(target="127.0.0.1")  # Set to a valid local address
+    scanner = NetworkScanner(target="127.0.0.1")
     analyzer = LogAnalyzer()
-    alert_manager = AlertManager(recipient="admin", smtp_user="user@example.com", smtp_password="password")  # Set these
+    alert_manager = AlertManager(recipient="admin", smtp_user="placeholder@example.com", smtp_password="placeholder")
     db = IncidentDatabase()
     process_monitor = ProcessMonitor()
     file_monitor = FileMonitor()
+    uptime_monitor = UptimeMonitor()
 
     logger.log("Homescanner: System initializing...")
 
@@ -53,6 +55,7 @@ def main():
             alert_manager.send_alert(file)
             db.add_incident(file)
 
+        logger.log(uptime_monitor.get_uptime())
         logger.log("Sleeping for next scan cycle...")
         time.sleep(60)
 
