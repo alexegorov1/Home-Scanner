@@ -5,14 +5,14 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional
 
 class AlertManager:
-    DEFAULT_EMAIL = "{recipient}@sentinelguard.com"
+    DEFAULT_EMAIL_DOMAIN = "sentinelguard.com"
     DEFAULT_SMTP_SERVER = "smtp.example.com"
     DEFAULT_SMTP_PORT = 587
 
-    def __init__(self, recipient: str, smtp_server: str = DEFAULT_SMTP_SERVER,
+    def __init__(self, recipient: str = "admin", smtp_server: str = DEFAULT_SMTP_SERVER,
                  smtp_port: int = DEFAULT_SMTP_PORT, smtp_user: Optional[str] = None,
                  smtp_password: Optional[str] = None) -> None:
-        self.email = self.DEFAULT_EMAIL.format(recipient=recipient)
+        self.email = f"{recipient}@{self.DEFAULT_EMAIL_DOMAIN}"
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.smtp_user = smtp_user
@@ -33,7 +33,10 @@ class AlertManager:
         msg["From"] = self.smtp_user
         msg["To"] = self.email
         msg["Subject"] = f"Security Alert - {threat}"
-        msg.attach(MIMEText(f"An alert has been triggered due to the detection of: {threat}. Please take necessary actions.", "plain"))
+        msg.attach(MIMEText(
+            f"An alert has been triggered due to the detection of: {threat}. Please take necessary actions.",
+            "plain"
+        ))
 
         server = None
         try:
