@@ -8,17 +8,17 @@ from monitoring.process_monitor import ProcessMonitor
 from security.file_monitor import FileMonitor
 from api.server import run_api_server
 from cli.cli import start_cli
- 
+
 def main():
     logger = Logger()
-    scanner = NetworkScanner()
+    scanner = NetworkScanner(target="127.0.0.1")  # Set to a valid local address
     analyzer = LogAnalyzer()
-    alert_manager = AlertManager()
+    alert_manager = AlertManager(recipient="admin", smtp_user="user@example.com", smtp_password="password")  # Set these
     db = IncidentDatabase()
     process_monitor = ProcessMonitor()
     file_monitor = FileMonitor()
 
-    logger.log("SentinelGuard Pro Max: System initializing...")
+    logger.log("Homescanner: System initializing...")
 
     while True:
         logger.log("Running network scan...")
