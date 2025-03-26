@@ -1,0 +1,29 @@
+title: Advanced Obfuscated PowerShell Command Detected
+id: rule-001
+status: production
+description: Detects suspicious PowerShell usage patterns typical of obfuscated or evasive execution.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: powershell.exe
+    CommandLine|contains:
+      - "encodedcommand"
+      - "bypass"
+      - "hidden"
+      - "NoProfile"
+      - "-w hidden"
+      - "-nop"
+  parent:
+    ParentImage|endswith:
+      - explorer.exe
+      - winword.exe
+      - excel.exe
+  condition: selection and parent
+level: high
+tags:
+  - attack.execution
+  - attack.defense_evasion
+  - attack.t1059.001
+  - attack.t1027
