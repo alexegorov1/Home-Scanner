@@ -1,0 +1,21 @@
+title: Suspicious Use of mshta.exe
+id: rule-006
+status: production
+description: Detects execution of mshta.exe with embedded JavaScript or remote script loading.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: mshta.exe
+    CommandLine|contains:
+      - "http"
+      - "javascript:"
+      - ".hta"
+      - "vbscript:"
+  condition: selection
+level: high
+tags:
+  - attack.execution
+  - attack.t1218.005
+  - attack.defense_evasion
