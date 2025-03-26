@@ -1,0 +1,28 @@
+title: Execution of Common Recon or Exfiltration Network Tools
+id: rule-004
+status: production
+description: Detects execution of tools like nmap, curl, whois, or nc, often used during internal reconnaissance or C2 setup.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+      - nmap.exe
+      - curl.exe
+      - nc.exe
+      - whois.exe
+      - ftp.exe
+    CommandLine|contains:
+      - "-o"
+      - "-i"
+      - "--data"
+      - "--upload"
+  condition: selection
+level: medium
+tags:
+  - attack.discovery
+  - attack.command_and_control
+  - attack.exfiltration
+  - attack.t1046
+  - attack.t1041
