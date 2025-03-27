@@ -12,22 +12,16 @@ from system.uptime_monitor import UptimeMonitor
 from api.server import run_api_server
 from cli.cli import HomescannerCLI
 
-
 def build_components():
     logger = Logger()
     scanner = NetworkScanner(target="127.0.0.1")
     analyzer = LogAnalyzer()
-    alert_manager = AlertManager(
-        recipient="admin",
-        smtp_user="placeholder@example.com",
-        smtp_password="placeholder"
-    )
+    alert_manager = AlertManager()
     db = IncidentDatabase()
     process_monitor = ProcessMonitor()
     file_monitor = FileMonitor()
     disk_monitor = DiskMonitor()
     uptime_monitor = UptimeMonitor()
-
     return {
         "logger": logger,
         "scanner": scanner,
@@ -39,7 +33,6 @@ def build_components():
         "disk_monitor": disk_monitor,
         "uptime_monitor": uptime_monitor
     }
-
 
 def main_loop(components):
     logger = components["logger"]
@@ -100,17 +93,15 @@ def main_loop(components):
             elapsed = time.time() - cycle_start
             sleep_time = max(0, 60 - elapsed)
             time.sleep(sleep_time)
+
     except KeyboardInterrupt:
         logger.log("Homescanner: Shutdown requested via keyboard.")
     except Exception as e:
         logger.log(f"Homescanner: Critical error in main loop: {e}")
         raise
 
-
 def run_all():
     components = build_components()
-
-    # CLI и API запускаются в отдельных потоках
     cli = HomescannerCLI(
         components["uptime_monitor"],
         components["disk_monitor"],
@@ -122,16 +113,9 @@ def run_all():
         components["scanner"],
         components["alert_manager"]
     )
-
     api_thread = threading.Thread(target=run_api_server, daemon=True)
     cli_thread = threading.Thread(target=cli.start, daemon=True)
-
     api_thread.start()
     cli_thread.start()
-
-    # Основной мониторинговый цикл
     main_loop(components)
 
-
-if __name__ == "__main__":
-    run_all()
