@@ -33,6 +33,7 @@ class HomescannerCLI:
         self.process_monitor = process_monitor
         self.scanner = scanner
         self.alert_manager = alert_manager
+        self.version = "1.0.0"
         self.commands = {
             "help": self.help,
             "exit": self.exit,
@@ -41,7 +42,8 @@ class HomescannerCLI:
             "disk": self.disk,
             "logs": self.logs,
             "incidents": self.incidents,
-            "scan": self.manual_scan
+            "scan": self.manual_scan,
+            "version": self.version_info
         }
 
     def start(self):
@@ -49,8 +51,9 @@ class HomescannerCLI:
         while True:
             try:
                 command = input(Fore.YELLOW + "> ").strip().lower()
-                if command in self.commands:
-                    self.commands[command]()
+                func = self.commands.get(command)
+                if func:
+                    func()
                 else:
                     print(Fore.RED + "Unknown command. Type 'help' to list available commands.")
             except KeyboardInterrupt:
@@ -64,6 +67,7 @@ class HomescannerCLI:
         print("  logs       - Show last 20 log entries")
         print("  incidents  - Show latest 5 incidents from database")
         print("  scan       - Manually trigger all scans")
+        print("  version    - Show CLI version")
         print("  exit       - Exit the CLI\n")
 
     def exit(self):
@@ -93,26 +97,28 @@ class HomescannerCLI:
         print(Fore.MAGENTA + "---------------------------\n")
 
     def incidents(self):
-        conn = self.db.get_connection()
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT timestamp, description FROM incidents ORDER BY timestamp DESC LIMIT 5")
-            rows = cursor.fetchall()
-            if not rows:
-                print(Fore.YELLOW + "No incidents found.")
+        try:
+            conn = self.db.get_connection()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT timestamp, description FROM incidents ORDER BY timestamp DESC LIMIT 5")
+                rows = cursor.fetchall()
+                if not rows:
+                    print(Fore.YELLOW + "No incidents found.")
+                else:
+                    print(Fore.MAGENTA + "\n--- Recent Incidents ---")
+                    for ts, desc in rows:
+                        print(f"{ts} | {desc}")
+                    print(Fore.MAGENTA + "------------------------\n")
+                conn.close()
             else:
-                print(Fore.MAGENTA + "\n--- Recent Incidents ---")
-                for ts, desc in rows:
-                    print(f"{ts} | {desc}")
-                print(Fore.MAGENTA + "------------------------\n")
-            conn.close()
-        else:
-            print(Fore.RED + "Failed to connect to the database.")
+                print(Fore.RED + "Failed to connect to the database.")
+        except Exception as e:
+            print(Fore.RED + f"Error fetching incidents: {e}")
 
     def manual_scan(self):
-        print(Fore.CYAN + "Running full scan...")
+        print(Fore.CYAN + "Running full scan...\n")
 
-        # Network scan
         threats = self.scanner.scan()
         for threat in threats:
             self.logger.log(f"Threat detected: {threat}")
@@ -120,7 +126,6 @@ class HomescannerCLI:
             self.db.add_incident(threat)
             print(Fore.RED + f"Network threat: {threat}")
 
-        # Log analysis
         anomalies = self.analyzer.analyze_logs()
         for anomaly in anomalies:
             self.logger.log(f"Log anomaly detected: {anomaly}")
@@ -128,7 +133,6 @@ class HomescannerCLI:
             self.db.add_incident(anomaly)
             print(Fore.RED + f"Log anomaly: {anomaly}")
 
-        # File modifications
         modified_files = self.file_monitor.check_files()
         for file in modified_files:
             self.logger.log(f"Modified file detected: {file}")
@@ -136,7 +140,6 @@ class HomescannerCLI:
             self.db.add_incident(file)
             print(Fore.RED + f"File modified: {file}")
 
-        # Process check
         suspicious_processes = self.process_monitor.check_processes()
         for proc in suspicious_processes:
             self.logger.log(f"Suspicious process detected: {proc}")
@@ -144,7 +147,6 @@ class HomescannerCLI:
             self.db.add_incident(proc)
             print(Fore.RED + f"Suspicious process: {proc}")
 
-        # Disk usage
         disk_warnings = self.disk_monitor.check_disk_usage()
         for warning in disk_warnings:
             self.logger.log(warning)
@@ -152,4 +154,8 @@ class HomescannerCLI:
             self.db.add_incident(warning)
             print(Fore.RED + f"Disk warning: {warning}")
 
-        print(Fore.GREEN + "Scan complete.\n")
+        print(Fore.GREEN + "\nScan complete.\n")
+
+    def version_info(self):
+        print(Fore.CYAN + f"Homescanner version {self.version}")
+
