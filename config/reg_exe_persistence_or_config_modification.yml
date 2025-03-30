@@ -1,0 +1,19 @@
+title: Suspicious Use of reg.exe for Persistence
+id: rule-010
+status: production
+description: Detects use of reg.exe to add or modify registry keys commonly used for persistence.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image: C:\Windows\System32\reg.exe
+    CommandLine|contains:
+      - "add"
+      - "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+      - "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+  condition: selection
+level: high
+tags:
+  - attack.persistence
+  - attack.t1547.001
