@@ -1,0 +1,20 @@
+title: Shadow Copy Deletion via vssadmin
+id: rule-008
+status: production
+description: Detects potential ransomware behavior where shadow copies are deleted using vssadmin.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image: C:\Windows\System32\vssadmin.exe
+    CommandLine|contains:
+      - "delete shadows"
+      - "/all"
+      - "/quiet"
+  condition: selection
+level: critical
+tags:
+  - attack.impact
+  - attack.t1490
+  - ransomware
