@@ -1,0 +1,21 @@
+title: WMIC Spawning Suspicious Command
+id: rule-006
+status: production
+description: Detects use of wmic.exe executing suspicious commands that may indicate lateral movement or persistence.
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image: C:\Windows\System32\wbem\wmic.exe
+    CommandLine|contains:
+      - "process call create"
+      - "cmd.exe"
+      - "powershell"
+      - "mshta"
+  condition: selection
+level: high
+tags:
+  - attack.execution
+  - attack.t1047
+  - attack.lateral_movement
