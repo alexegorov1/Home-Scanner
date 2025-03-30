@@ -12,23 +12,31 @@ class LogAnalyzer:
             logs = self.logger.read_logs()
         except FileNotFoundError:
             return ["Log file not found. No logs to analyze."]
+        except Exception as e:
+            return [f"Error reading logs: {e}"]
 
         anomalies = []
         for log in logs:
-            log = log.strip().lower()
+            normalized_log = log.strip().lower()
             for rule in self.rules:
-                pattern = self._extract_pattern(rule)
-                if pattern and re.search(pattern, log, re.IGNORECASE):
-                    anomalies.append(f"[{rule.get('title', 'Unnamed Rule')}] {log}")
+                if self._match_rule(rule, normalized_log):
+                    title = rule.get("title", "Unnamed Rule")
+                    anomalies.append(f"[{title}] {log.strip()}")
         return anomalies
 
-    def _extract_pattern(self, rule):
+    def _match_rule(self, rule, log_entry):
         try:
             detection = rule.get("detection", {})
-            for field, value in detection.get("selection", {}).items():
-                if isinstance(value, str):
-                    return re.escape(value)
+            selection = detection.get("selection", {})
+            if not selection:
+                return False
+
+            for field, value in selection.items():
+                if isinstance(value, str) and re.search(re.escape(value), log_entry, re.IGNORECASE):
+                    return True
                 elif isinstance(value, list):
-                    return "|".join([re.escape(v) for v in value])
+                    if any(re.search(re.escape(item), log_entry, re.IGNORECASE) for item in value):
+                        return True
+            return False
         except Exception:
-            return None
+            return False
