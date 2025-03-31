@@ -1,39 +1,58 @@
+import shutil
+import logging
 import os
-import hashlib
+from datetime import datetime
 from core.config_loader import load_config
 
-class FileMonitor:
-    def __init__(self):
-        cfg = load_config()
-        self.watch_dir = cfg.get("file_monitor", {}).get("watch_dir", "data")
-        self.files_hashes = self._get_initial_hashes()
+class DiskMonitor:
+    def __init__(self, path="/"):
+        self.path = path
+        self.config = load_config()
+        self.threshold_percent = self.config.get("thresholds", {}).get("disk_usage_percent", 85)
+        self.min_free_gb = self.config.get("thresholds", {}).get("disk_min_free_gb", 2)
+        self.alert_on_mount_failure = self.config.get("alerts", {}).get("disk_mount_failure", True)
+        self.logger = logging.getLogger("DiskMonitor")
+        self.logger.setLevel(logging.INFO)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
 
-    def _get_initial_hashes(self):
-        file_hashes = {}
-        for root, _, files in os.walk(self.watch_dir):
-            for file in files:
-                path = os.path.join(root, file)
-                file_hash = self._get_file_hash(path)
-                if file_hash:
-                    file_hashes[path] = file_hash
-        return file_hashes
+    def check_disk_usage(self):
+        if not os.path.exists(self.path):
+            message = f"DiskMonitor: Path does not exist - {self.path}"
+            self.logger.error(message)
+            return [message]
 
-    def _get_file_hash(self, path):
-        hasher = hashlib.md5()
         try:
-            with open(path, "rb") as f:
-                for chunk in iter(lambda: f.read(4096), b""):
-                    hasher.update(chunk)
-            return hasher.hexdigest()
-        except Exception:
-            return None
+            usage = shutil.disk_usage(self.path)
+            total_gb = usage.total / (1024 ** 3)
+            used_gb = usage.used / (1024 ** 3)
+            free_gb = usage.free / (1024 ** 3)
+            percent_used = (usage.used / usage.total) * 100
 
-    def check_files(self):
-        modified = []
-        current_hashes = self._get_initial_hashes()
-        for path, new_hash in current_hashes.items():
-            old_hash = self.files_hashes.get(path)
-            if old_hash is None or new_hash != old_hash:
-                modified.append(path)
-        self.files_hashes = current_hashes
-        return modified
+            alerts = []
+
+            if percent_used >= self.threshold_percent:
+                warning = f"Disk usage exceeds threshold: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
+                self.logger.warning(warning)
+                alerts.append(warning)
+
+            if free_gb < self.min_free_gb:
+                warning = f"Low disk space: only {free_gb:.2f} GB free on {self.path} (min required: {self.min_free_gb} GB)"
+                self.logger.warning(warning)
+                alerts.append(warning)
+
+            self.logger.info(f"Disk check: {used_gb:.2f} GB used / {total_gb:.2f} GB total on {self.path}")
+
+            return alerts
+
+        except PermissionError as e:
+            message = f"DiskMonitor: Permission denied while accessing {self.path} - {e}"
+            self.logger.error(message)
+            return [message]
+        except Exception as e:
+            message = f"DiskMonitor: Unexpected error - {str(e)}"
+            self.logger.exception(message)
+            return [message]
