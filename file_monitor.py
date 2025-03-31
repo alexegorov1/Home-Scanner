@@ -1,17 +1,19 @@
-import shutil
-import logging
 import os
+import hashlib
+import logging
+import time
 from datetime import datetime
 from core.config_loader import load_config
 
-class DiskMonitor:
-    def __init__(self, path="/"):
-        self.path = path
-        self.config = load_config()
-        self.threshold_percent = self.config.get("thresholds", {}).get("disk_usage_percent", 85)
-        self.min_free_gb = self.config.get("thresholds", {}).get("disk_min_free_gb", 2)
-        self.alert_on_mount_failure = self.config.get("alerts", {}).get("disk_mount_failure", True)
-        self.logger = logging.getLogger("DiskMonitor")
+class FileMonitor:
+    def __init__(self):
+        cfg = load_config()
+        self.watch_dir = cfg.get("file_monitor", {}).get("watch_dir", "data")
+        self.hash_algorithm = cfg.get("file_monitor", {}).get("hash_algorithm", "sha256")
+        self.track_extensions = cfg.get("file_monitor", {}).get("extensions", [])
+        self.include_timestamps = cfg.get("file_monitor", {}).get("track_modified_time", True)
+        self.files_metadata = self._get_initial_state()
+        self.logger = logging.getLogger("FileMonitor")
         self.logger.setLevel(logging.INFO)
         if not self.logger.handlers:
             handler = logging.StreamHandler()
@@ -19,40 +21,60 @@ class DiskMonitor:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
 
-    def check_disk_usage(self):
-        if not os.path.exists(self.path):
-            message = f"DiskMonitor: Path does not exist - {self.path}"
-            self.logger.error(message)
-            return [message]
+    def _get_initial_state(self):
+        metadata = {}
+        for root, _, files in os.walk(self.watch_dir):
+            for file in files:
+                if self.track_extensions and not file.lower().endswith(tuple(self.track_extensions)):
+                    continue
+                path = os.path.join(root, file)
+                file_hash = self._calculate_hash(path)
+                modified_time = self._get_mod_time(path) if self.include_timestamps else None
+                if file_hash:
+                    metadata[path] = {"hash": file_hash, "mtime": modified_time}
+        return metadata
 
+    def _calculate_hash(self, path):
         try:
-            usage = shutil.disk_usage(self.path)
-            total_gb = usage.total / (1024 ** 3)
-            used_gb = usage.used / (1024 ** 3)
-            free_gb = usage.free / (1024 ** 3)
-            percent_used = (usage.used / usage.total) * 100
-
-            alerts = []
-
-            if percent_used >= self.threshold_percent:
-                warning = f"Disk usage exceeds threshold: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
-                self.logger.warning(warning)
-                alerts.append(warning)
-
-            if free_gb < self.min_free_gb:
-                warning = f"Low disk space: only {free_gb:.2f} GB free on {self.path} (min required: {self.min_free_gb} GB)"
-                self.logger.warning(warning)
-                alerts.append(warning)
-
-            self.logger.info(f"Disk check: {used_gb:.2f} GB used / {total_gb:.2f} GB total on {self.path}")
-
-            return alerts
-
-        except PermissionError as e:
-            message = f"DiskMonitor: Permission denied while accessing {self.path} - {e}"
-            self.logger.error(message)
-            return [message]
+            hasher = hashlib.new(self.hash_algorithm)
+        except ValueError:
+            hasher = hashlib.sha256()
+        try:
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
         except Exception as e:
-            message = f"DiskMonitor: Unexpected error - {str(e)}"
-            self.logger.exception(message)
-            return [message]
+            self.logger.warning(f"Failed to hash file: {path} ({e})")
+            return None
+
+    def _get_mod_time(self, path):
+        try:
+            return os.path.getmtime(path)
+        except Exception:
+            return None
+
+    def check_files(self):
+        changes = []
+        current_state = self._get_initial_state()
+
+        for path, meta in current_state.items():
+            old_meta = self.files_metadata.get(path)
+            if not old_meta:
+                changes.append(f"New file detected: {path}")
+            elif meta["hash"] != old_meta["hash"]:
+                changes.append(f"File modified: {path}")
+            elif self.include_timestamps and meta["mtime"] != old_meta.get("mtime"):
+                changes.append(f"Timestamp changed: {path}")
+
+        for path in self.files_metadata:
+            if path not in current_state:
+                changes.append(f"File deleted: {path}")
+
+        if changes:
+            self.logger.warning(f"{len(changes)} file system change(s) detected.")
+            for c in changes:
+                self.logger.info(c)
+
+        self.files_metadata = current_state
+        return changes
