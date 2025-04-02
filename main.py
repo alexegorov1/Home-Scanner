@@ -118,6 +118,49 @@ def main_loop(components):
         logger.log(f"Homescanner: Critical error in main loop: {fatal_error}", level="critical")
         raise
 
+def health_check(components):
+    logger = components["logger"]
+    db = components["db"]
+    alert_manager = components["alert_manager"]
+    scanner = components["scanner"]
+    file_monitor = components["file_monitor"]
+    disk_monitor = components["disk_monitor"]
+
+    logger.log("Performing system health check...", level="info")
+
+    try:
+        if db.get_connection() is None:
+            logger.log("Health Check Failed: Cannot connect to incident database.", level="error")
+        else:
+            logger.log("Database connection check passed.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Database failure - {e}", level="error")
+
+    try:
+        test_threats = scanner.scan()
+        logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
+
+    try:
+        tmp_file_check = file_monitor.check_files()
+        logger.log(f"File monitor test ran successfully.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: File monitor failure - {e}", level="error")
+
+    try:
+        test_disk = disk_monitor.check_disk_usage()
+        logger.log(f"Disk monitor test ran successfully.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Disk monitor failure - {e}", level="error")
+
+    if not alert_manager.enabled:
+        logger.log("Health Check Warning: Email alerts are disabled or misconfigured.", level="warning")
+    else:
+        logger.log("AlertManager configuration check passed.", level="info")
+
+    logger.log("Health check completed.", level="info")
+
 def run_all():
     components = build_components()
     cli = HomescannerCLI(
@@ -136,4 +179,3 @@ def run_all():
     api_thread.start()
     cli_thread.start()
     main_loop(components)
-
