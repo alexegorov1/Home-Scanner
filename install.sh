@@ -8,16 +8,20 @@ PYTHON_VERSION_REQUIRED="3.8"
 REQUIREMENTS_FILE="requirements.txt"
 CONFIG_PLACEHOLDER="config/config.yml"
 LOG_FILE="setup.log"
+PYTHON_EXEC="python3"
 
 log() {
   local level="$1"
   local message="$2"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $message" | tee -a "$LOG_FILE"
+  local timestamp
+  timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+  echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
 }
 
 header() {
+  echo ""
   echo "=================================================="
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$PROJECT_NAME Setup]"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$PROJECT_NAME SETUP START]"
   echo "=================================================="
 }
 
@@ -29,36 +33,39 @@ check_command() {
 }
 
 check_python_version() {
-  current=$(python3 -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
-  required="$PYTHON_VERSION_REQUIRED"
-  if [[ $(echo -e "$required\n$current" | sort -V | head -n1) != "$required" ]]; then
-    log "ERROR" "Python $required or higher is required. Found: $current"
+  local version
+  version=$($PYTHON_EXEC -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
+  if [[ $(printf '%s\n' "$PYTHON_VERSION_REQUIRED" "$version" | sort -V | head -n1) != "$PYTHON_VERSION_REQUIRED" ]]; then
+    log "ERROR" "Python $PYTHON_VERSION_REQUIRED or higher is required. Found: $version"
     exit 1
   fi
+  log "INFO" "Python version check passed ($version)"
 }
 
-create_venv() {
-  log "INFO" "Creating virtual environment..."
-  python3 -m venv "$VENV_DIR"
+create_virtualenv() {
+  log "INFO" "Creating virtual environment in $VENV_DIR..."
+  $PYTHON_EXEC -m venv "$VENV_DIR"
   source "$VENV_DIR/bin/activate"
+  log "INFO" "Virtual environment activated."
 }
 
-upgrade_packages() {
+upgrade_core_packages() {
   log "INFO" "Upgrading pip, setuptools, wheel..."
-  pip install --upgrade pip setuptools wheel >>"$LOG_FILE" 2>&1
+  pip install --quiet --upgrade pip setuptools wheel
 }
 
-install_dependencies() {
+install_project_dependencies() {
   if [[ -f "$REQUIREMENTS_FILE" ]]; then
     log "INFO" "Installing dependencies from $REQUIREMENTS_FILE..."
-    pip install -r "$REQUIREMENTS_FILE" >>"$LOG_FILE" 2>&1
+    pip install --quiet -r "$REQUIREMENTS_FILE"
+    log "INFO" "Dependencies installed."
   else
-    log "WARN" "$REQUIREMENTS_FILE not found. Skipping pip installs."
+    log "WARN" "No $REQUIREMENTS_FILE found. Skipping dependency install."
   fi
 }
 
-create_directories() {
-  log "INFO" "Creating project folders..."
+prepare_directories() {
+  log "INFO" "Creating required directories..."
   mkdir -p logs data config
 }
 
@@ -66,49 +73,52 @@ generate_default_config() {
   if [[ ! -f "$CONFIG_PLACEHOLDER" ]]; then
     log "INFO" "Generating default config file..."
     cat <<EOF > "$CONFIG_PLACEHOLDER"
-# Default detection rules placeholder
-# Add YAML detection rules under the config/ directory.
+# config/config.yml
+# Placeholder for detection rules configuration.
 EOF
   fi
 }
 
 create_gitignore() {
   if [[ ! -f ".gitignore" ]]; then
-    log "INFO" "Adding default .gitignore..."
+    log "INFO" "Creating .gitignore file..."
     cat <<EOF > .gitignore
 $VENV_DIR/
 __pycache__/
 *.pyc
 logs/
 data/
+config/*.yml
+*.log
 EOF
   fi
 }
 
-show_summary() {
+final_summary() {
   echo ""
   echo "=================================================="
-  echo "Homescanner environment is ready."
-  echo "Activate with:"
+  echo "✅ Setup complete. Environment is ready."
+  echo "Activate environment with:"
   echo "  source $VENV_DIR/bin/activate"
-  echo "Run the project with:"
+  echo "Run Homescanner with:"
   echo "  python main.py"
-  echo "Logs saved to: $LOG_FILE"
+  echo "Log output is recorded in: $LOG_FILE"
   echo "=================================================="
 }
 
 main() {
   header
-  check_command python3
+  check_command "$PYTHON_EXEC"
   check_command pip3
   check_python_version
-  create_venv
-  upgrade_packages
-  install_dependencies
-  create_directories
+  create_virtualenv
+  upgrade_core_packages
+  install_project_dependencies
+  prepare_directories
   generate_default_config
   create_gitignore
-  show_summary
+  final_summary
 }
 
 main "$@"
+
