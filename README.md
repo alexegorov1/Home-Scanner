@@ -40,14 +40,6 @@ You’ll need an SMTP server and credentials if you want email alerts. Without t
 Configuration
 Most settings are hardcoded, but you can tweak things like the directory for file monitoring, suspicious process keywords, and log patterns by modifying the respective classes. The API server runs on port 5000 by default, but you can change that when starting the server.
 
-Dependencies
-You'll need Python and a few libraries installed:
-
-nginx
-Copy
-Edit
-pip install flask psutil sqlite3
-Other than that, just make sure you have proper permissions to read system logs, scan files, and monitor processes.
 
 Logs and Data Storage
 All logs are stored in logs/system.log. The database file for incidents is in data/incidents.db. If the database doesn’t exist, it’ll be created automatically.
@@ -56,3 +48,18 @@ Notes
 This is not a replacement for enterprise security tools, but it’s a solid lightweight monitoring system. It’s built to be simple, efficient, and effective at spotting threats in real time. If you need more advanced detection, you’ll probably want to integrate this with a larger security stack.
 
 If you run this on a production system, be aware that network scanning and process monitoring can sometimes trigger security alerts themselves. Use it responsibly.
+
+Recent Enhancements and System Evolution
+Homescanner has matured into a more robust and comprehensive monitoring platform through a series of structural upgrades. These improvements were designed to increase visibility into system behavior, improve reliability in long-running deployments, and reduce the risk of silent failures across any monitored environment.
+
+A new user activity monitoring subsystem has been integrated to track active user sessions in real time. This module detects the appearance of new logins and records them for further analysis, making it easier to identify lateral movement, credential compromise, or suspicious privilege elevation events. Session anomalies are treated as first-class incidents, written to both the database and the log stream, and optionally routed through the alerting pipeline.
+
+To enhance operational resilience, the system now tracks its own uptime using monotonic system clocks. This allows operators and automation systems to detect unexpected restarts or service interruptions. Uptime values are exposed through the CLI and are periodically written to disk to maintain historical observability across restarts.
+
+The initialization routine now includes a comprehensive health verification step. Before the monitoring loop is allowed to run, the system verifies that all core components are functional and correctly configured. This includes database connectivity, file path validation, scanner readiness, alert configuration correctness, and log path availability. Failures in any of these checks are logged with high severity and prevent the system from entering a potentially unstable runtime state.
+
+The command-line interface has also been significantly extended. In addition to providing runtime status and incident listings, it now supports manual execution of all scanning and analysis modules, log inspection, disk usage review, and uptime queries. The CLI is intended for administrators and responders who prefer direct system interaction without relying on a full dashboard or remote agent.
+
+System configuration has been consolidated into a single YAML file, which defines operational parameters for each component. This includes thresholds, monitored paths, detection patterns, and credentials. The configuration is modular: each component reads only what it needs, and default values are applied automatically when fields are absent. This simplifies maintenance while preserving flexibility and scalability.
+
+The entire platform remains fully self-contained. No additional services are required beyond Python 3.8 or higher. Installation is automated through a single script that handles virtual environment setup, dependency installation, directory creation, and default config generation. Once deployed, launching the system is as simple as executing python main.py, which brings up the API server, the CLI, and the monitoring loop in parallel threads.
