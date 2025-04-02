@@ -9,9 +9,9 @@ from monitoring.process_monitor import ProcessMonitor
 from security.file_monitor import FileMonitor
 from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
+from monitoring.user_activity_monitor import UserActivityMonitor
 from api.server import run_api_server
 from cli.cli import HomescannerCLI
-from monitoring.user_activity_monitor import UserActivityMonitor
 
 def build_components():
     logger = Logger()
@@ -23,6 +23,8 @@ def build_components():
     file_monitor = FileMonitor()
     disk_monitor = DiskMonitor()
     uptime_monitor = UptimeMonitor()
+    user_activity_monitor = UserActivityMonitor()
+
     return {
         "logger": logger,
         "scanner": scanner,
@@ -32,7 +34,8 @@ def build_components():
         "process_monitor": process_monitor,
         "file_monitor": file_monitor,
         "disk_monitor": disk_monitor,
-        "uptime_monitor": uptime_monitor
+        "uptime_monitor": uptime_monitor,
+        "user_activity_monitor": user_activity_monitor
     }
 
 def main_loop(components):
@@ -45,6 +48,7 @@ def main_loop(components):
     file_monitor = components["file_monitor"]
     disk_monitor = components["disk_monitor"]
     uptime_monitor = components["uptime_monitor"]
+    user_activity_monitor = components["user_activity_monitor"]
 
     logger.log("Homescanner: System initializing...", level="info")
     logger.log("Homescanner: System is up and running.", level="info")
@@ -60,35 +64,42 @@ def main_loop(components):
                 for threat in threats:
                     logger.log(f"Threat detected: {threat}", level="warning")
                     alert_manager.send_alert(threat)
-                    db.add_incident(threat)
+                    db.add_incident(threat, type="network", severity="warning", source="scanner")
 
                 logger.log("Analyzing logs for anomalies...", level="info")
                 anomalies = analyzer.analyze_logs()
                 for anomaly in anomalies:
                     logger.log(f"Log anomaly detected: {anomaly}", level="warning")
                     alert_manager.send_alert(anomaly)
-                    db.add_incident(anomaly)
+                    db.add_incident(anomaly, type="log", severity="warning", source="log_analyzer")
 
                 logger.log("Checking running processes...", level="info")
                 suspicious_processes = process_monitor.check_processes()
                 for proc in suspicious_processes:
                     logger.log(f"Suspicious process detected: {proc}", level="warning")
                     alert_manager.send_alert(proc)
-                    db.add_incident(proc)
+                    db.add_incident(proc, type="process", severity="warning", source="process_monitor")
 
                 logger.log("Scanning files for suspicious modifications...", level="info")
                 modified_files = file_monitor.check_files()
                 for file in modified_files:
                     logger.log(f"Modified file detected: {file}", level="warning")
                     alert_manager.send_alert(file)
-                    db.add_incident(file)
+                    db.add_incident(file, type="filesystem", severity="warning", source="file_monitor")
 
                 logger.log("Checking disk usage...", level="info")
                 disk_warnings = disk_monitor.check_disk_usage()
                 for warning in disk_warnings:
                     logger.log(f"Disk warning: {warning}", level="warning")
                     alert_manager.send_alert(warning)
-                    db.add_incident(warning)
+                    db.add_incident(warning, type="disk", severity="warning", source="disk_monitor")
+
+                logger.log("Checking user sessions...", level="info")
+                new_logins = user_activity_monitor.check_new_logins()
+                for login in new_logins:
+                    logger.log(f"New user login detected: {login}", level="warning")
+                    alert_manager.send_alert(f"New user login detected: {login}")
+                    db.add_incident(f"New user login detected: {login}", type="account", severity="warning", source="user_monitor")
 
                 uptime = uptime_monitor.get_uptime()
                 logger.log(f"{uptime}", level="info")
@@ -125,3 +136,4 @@ def run_all():
     api_thread.start()
     cli_thread.start()
     main_loop(components)
+
