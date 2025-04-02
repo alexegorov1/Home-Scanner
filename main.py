@@ -11,6 +11,7 @@ from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
 from api.server import run_api_server
 from cli.cli import HomescannerCLI
+from monitoring.user_activity_monitor import UserActivityMonitor
 
 def build_components():
     logger = Logger()
