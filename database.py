@@ -2,9 +2,13 @@ import sqlite3
 import os
 import logging
 from datetime import datetime
+import pathlib
 
 class IncidentDatabase:
-    def __init__(self, db_file="PLACEHOLDER_PATH/incidents.db"):
+    def __init__(self, db_file=None):
+        if not db_file or "PLACEHOLDER_PATH" in db_file:
+            base_dir = pathlib.Path(__file__).resolve().parent.parent
+            db_file = os.path.join(base_dir, "data", "incidents.db")
         self.db_file = db_file
         self._ensure_directory()
         self._initialize_database()
