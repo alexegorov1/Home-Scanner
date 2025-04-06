@@ -1,51 +1,66 @@
 import psutil
 import logging
-from core.config_loader import load_config
+from datetime import datetime
+from threading import Lock
 
 class ProcessMonitor:
-    def __init__(self):
-        config = load_config()
-        self.suspicious_keywords = config.get("process_monitor", {}).get(
-            "suspicious_keywords",
-            ["malware", "exploit", "trojan", "keylogger", "meterpreter", "backdoor", "rat"]
-        )
-        self.alert_on_privileged = config.get("process_monitor", {}).get("alert_on_privileged", True)
-        self.max_results = config.get("process_monitor", {}).get("max_results", 50)
+    def __init__(self, extra_keywords=None, log_file=None):
+        """
+        Initialize the process monitor with predefined suspicious keywords.
+        :param extra_keywords: Optional list of additional suspicious terms.
+        :param log_file: Optional path to log detected processes.
+        """
+        default_keywords = {"malware", "exploit", "trojan", "keylogger", "meterpreter", "cobalt", "empire"}
+        if extra_keywords:
+            default_keywords.update(map(str.lower, extra_keywords))
+        self.suspicious_keywords = default_keywords
+        self.log_file = log_file
+        self._lock = Lock()
 
-        self.logger = logging.getLogger("ProcessMonitor")
-        self.logger.setLevel(logging.INFO)
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
-
-    def check_processes(self):
-        suspicious = []
+    def _log_detection(self, message: str):
+        if not self.log_file:
+            logging.warning(f"[ProcessMonitor] {message}")
+            return
         try:
-            for proc in psutil.process_iter(['pid', 'name', 'username']):
-                if len(suspicious) >= self.max_results:
-                    break
-                try:
-                    name = proc.info.get('name', '') or ''
-                    name_lc = name.lower()
-                    username = proc.info.get('username', 'unknown')
+            with self._lock, open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.utcnow().isoformat(timespec='seconds')}] {message}\n")
+        except Exception as e:
+            logging.exception(f"[ProcessMonitor] Failed to write log: {e}")
 
-                    if any(k in name_lc for k in self.suspicious_keywords):
-                        suspicious.append(f"Keyword match: {name} (PID {proc.info['pid']}) owned by {username}")
+    def check_processes(self, include_cmdline=False):
+        """
+        Scan running processes for suspicious names or command-line args.
+        :param include_cmdline: If True, also inspect the command line of processes.
+        :return: List of detected suspicious processes (as formatted strings).
+        """
+        suspicious = []
 
-                    if self.alert_on_privileged and username in ['root', 'SYSTEM', 'Administrator']:
-                        if "python" in name_lc or "cmd" in name_lc:
-                            suspicious.append(f"Privileged suspicious process: {name} (PID {proc.info['pid']}) owned by {username}")
+        for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+            try:
+                pid = proc.info['pid']
+                name = (proc.info.get('name') or "").lower()
+                exe = (proc.info.get('exe') or "").lower()
+                cmdline = " ".join(proc.info.get('cmdline') or []).lower()
 
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    continue
-                except Exception as e:
-                    self.logger.warning(f"Unexpected error while scanning process: {e}")
+                detection_sources = []
 
-        except Exception as global_error:
-            self.logger.exception(f"Process enumeration failed: {global_error}")
+                if any(k in name for k in self.suspicious_keywords):
+                    detection_sources.append("name")
 
-        if suspicious:
-            self.logger.warning(f"{len(suspicious)} suspicious process(es) found.")
+                if any(k in exe for k in self.suspicious_keywords):
+                    detection_sources.append("exe")
+
+                if include_cmdline and any(k in cmdline for k in self.suspicious_keywords):
+                    detection_sources.append("cmdline")
+
+                if detection_sources:
+                    summary = f"[DETECTED] Suspicious process (PID {pid}) via {', '.join(detection_sources)}: {name or exe or '[unknown]'}"
+                    suspicious.append(summary)
+                    self._log_detection(summary)
+
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+            except Exception as e:
+                logging.exception(f"[ProcessMonitor] Unexpected error scanning PID {proc.pid}: {e}")
+
         return suspicious
