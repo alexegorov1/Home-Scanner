@@ -1,28 +1,37 @@
 import shutil
 import logging
 import os
+import time
+import json
 from datetime import datetime
 from core.config_loader import load_config
 
 class DiskMonitor:
-    def __init__(self, path="/"):
-        self.path = path
+    def __init__(self, path="/", log_file=None):
+        self.path = os.path.abspath(path)
         self.config = load_config()
         self.threshold_percent = self.config.get("thresholds", {}).get("disk_usage_percent", 85)
         self.min_free_gb = self.config.get("thresholds", {}).get("disk_min_free_gb", 2)
         self.alert_on_mount_failure = self.config.get("alerts", {}).get("disk_mount_failure", True)
-        self.logger = logging.getLogger("DiskMonitor")
-        self.logger.setLevel(logging.INFO)
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
+        self.snapshot_dir = self.config.get("paths", {}).get("snapshot_dir", "snapshots")
+        os.makedirs(self.snapshot_dir, exist_ok=True)
+        self.logger = self._setup_logger(log_file)
+
+    def _setup_logger(self, log_file):
+        logger = logging.getLogger(f"DiskMonitor:{self.path}")
+        logger.setLevel(logging.INFO)
+        if not logger.handlers:
+            handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+            logger.addHandler(handler)
+        return logger
 
     def check_disk_usage(self):
         if not os.path.exists(self.path):
-            message = f"DiskMonitor: Path does not exist - {self.path}"
-            self.logger.error(message)
+            message = f"Path does not exist: {self.path}"
+            if self.alert_on_mount_failure:
+                self.logger.error(message)
             return [message]
 
         try:
@@ -35,24 +44,70 @@ class DiskMonitor:
             alerts = []
 
             if percent_used >= self.threshold_percent:
-                warning = f"Disk usage exceeds threshold: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
+                warning = f"Disk usage alert: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
                 self.logger.warning(warning)
                 alerts.append(warning)
 
             if free_gb < self.min_free_gb:
-                warning = f"Low disk space: only {free_gb:.2f} GB free on {self.path} (min required: {self.min_free_gb} GB)"
+                warning = f"Low disk space alert: {free_gb:.2f} GB free on {self.path} (minimum: {self.min_free_gb} GB)"
                 self.logger.warning(warning)
                 alerts.append(warning)
 
-            self.logger.info(f"Disk check: {used_gb:.2f} GB used / {total_gb:.2f} GB total on {self.path}")
+            self.logger.info(f"Disk check OK: {used_gb:.2f} GB used / {total_gb:.2f} GB total / {free_gb:.2f} GB free on {self.path}")
 
+            self._save_snapshot(percent_used, total_gb, used_gb, free_gb)
             return alerts
 
         except PermissionError as e:
-            message = f"DiskMonitor: Permission denied while accessing {self.path} - {e}"
+            message = f"Permission denied accessing {self.path}: {e}"
             self.logger.error(message)
             return [message]
         except Exception as e:
-            message = f"DiskMonitor: Unexpected error - {str(e)}"
+            message = f"Unexpected error while checking disk: {str(e)}"
             self.logger.exception(message)
             return [message]
+
+    def _save_snapshot(self, percent_used, total_gb, used_gb, free_gb):
+        snapshot = {
+            "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
+            "path": self.path,
+            "percent_used": round(percent_used, 2),
+            "total_gb": round(total_gb, 2),
+            "used_gb": round(used_gb, 2),
+            "free_gb": round(free_gb, 2)
+        }
+        try:
+            filename = f"{int(time.time())}_disk_snapshot.json"
+            path = os.path.join(self.snapshot_dir, filename)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=2)
+        except Exception as e:
+            self.logger.warning(f"Failed to save snapshot: {e}")
+
+    def estimate_cleanup_needed(self, cleanup_target_gb):
+        try:
+            usage = shutil.disk_usage(self.path)
+            current_free_gb = usage.free / (1024 ** 3)
+            required_gb = cleanup_target_gb - current_free_gb
+            if required_gb <= 0:
+                return f"No cleanup needed. Current free: {current_free_gb:.2f} GB"
+            return f"Cleanup required: Free at least {required_gb:.2f} GB to meet target {cleanup_target_gb} GB"
+        except Exception as e:
+            return f"Estimation failed: {e}"
+
+    def export_status(self, output_path):
+        try:
+            usage = shutil.disk_usage(self.path)
+            report = {
+                "checked_at": datetime.utcnow().isoformat(timespec="seconds"),
+                "path": self.path,
+                "total_gb": round(usage.total / (1024 ** 3), 2),
+                "used_gb": round(usage.used / (1024 ** 3), 2),
+                "free_gb": round(usage.free / (1024 ** 3), 2),
+                "percent_used": round((usage.used / usage.total) * 100, 2)
+            }
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2)
+            self.logger.info(f"Disk status exported to {output_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to export disk status: {e}")
