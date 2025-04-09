@@ -1,10 +1,10 @@
 import os
 import hashlib
 import logging
-import time
+import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple
 from core.config_loader import load_config
 
 
@@ -12,10 +12,12 @@ class FileMonitor:
     def __init__(self):
         cfg = load_config()
 
-        self.watch_dir = Path(cfg.get("file_monitor", {}).get("watch_dir", "data")).resolve()
-        self.hash_algorithm = cfg.get("file_monitor", {}).get("hash_algorithm", "sha256").lower()
-        self.track_extensions = set(ext.lower() for ext in cfg.get("file_monitor", {}).get("extensions", []))
-        self.include_timestamps = cfg.get("file_monitor", {}).get("track_modified_time", True)
+        self.watch_dir: Path = Path(cfg.get("file_monitor", {}).get("watch_dir", "data")).resolve()
+        self.hash_algorithm: str = cfg.get("file_monitor", {}).get("hash_algorithm", "sha256").lower()
+        self.track_extensions: List[str] = [ext.lower().lstrip(".") for ext in cfg.get("file_monitor", {}).get("extensions", [])]
+        self.include_timestamps: bool = cfg.get("file_monitor", {}).get("track_modified_time", True)
+        self.recursive: bool = cfg.get("file_monitor", {}).get("recursive", True)
+        self.exclusions: List[str] = cfg.get("file_monitor", {}).get("exclude_paths", [])
 
         self.files_metadata: Dict[str, Dict[str, Optional[float]]] = {}
         self._init_logger()
@@ -27,9 +29,7 @@ class FileMonitor:
         self.logger.setLevel(logging.INFO)
         if not self.logger.handlers:
             handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                "[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
-            )
+            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
 
@@ -39,53 +39,74 @@ class FileMonitor:
         try:
             hashlib.new(self.hash_algorithm)
         except ValueError:
-            self.logger.warning(f"Unsupported hash algorithm '{self.hash_algorithm}', defaulting to sha256")
+            self.logger.warning(f"Unsupported hash algorithm '{self.hash_algorithm}', falling back to sha256.")
             self.hash_algorithm = "sha256"
 
     def _initialize_state(self):
+        self.logger.info(f"Initializing file metadata for directory: {self.watch_dir}")
         self.files_metadata = self._scan_directory()
+
+    def _is_excluded(self, path: Path) -> bool:
+        for pattern in self.exclusions:
+            if pattern in str(path):
+                return True
+        return False
 
     def _scan_directory(self) -> Dict[str, Dict[str, Optional[float]]]:
         metadata = {}
+        if not self.watch_dir.exists():
+            self.logger.warning(f"Watch directory does not exist: {self.watch_dir}")
+            return metadata
+
         for root, _, files in os.walk(self.watch_dir, topdown=True):
             for filename in files:
-                filepath = Path(root) / filename
-                if self.track_extensions and filepath.suffix.lower().lstrip(".") not in self.track_extensions:
+                file_path = Path(root) / filename
+
+                if self.track_extensions and file_path.suffix.lower().lstrip(".") not in self.track_extensions:
+                    continue
+                if self._is_excluded(file_path):
                     continue
 
-                hash_value = self._calculate_hash(filepath)
-                mod_time = self._get_mod_time(filepath) if self.include_timestamps else None
+                file_hash = self._calculate_hash(file_path)
+                mod_time = self._get_mod_time(file_path) if self.include_timestamps else None
 
-                if hash_value is not None:
-                    metadata[str(filepath)] = {
-                        "hash": hash_value,
-                        "mtime": mod_time,
+                if file_hash:
+                    metadata[str(file_path)] = {
+                        "hash": file_hash,
+                        "mtime": mod_time
                     }
+
+            if not self.recursive:
+                break  # stop descending into subdirs
+
         return metadata
 
     def _calculate_hash(self, path: Path) -> Optional[str]:
         try:
             hasher = hashlib.new(self.hash_algorithm)
         except Exception:
+            self.logger.warning(f"Falling back to sha256 for hashing.")
             hasher = hashlib.sha256()
 
         try:
             with path.open("rb") as f:
-                for chunk in iter(lambda: f.read(8192), b""):
+                for chunk in iter(lambda: f.read(65536), b""):
                     hasher.update(chunk)
             return hasher.hexdigest()
         except Exception as e:
-            self.logger.warning(f"Failed to hash file: {path} — {e}")
+            self.logger.warning(f"Failed to hash file {path}: {e}")
             return None
 
     def _get_mod_time(self, path: Path) -> Optional[float]:
         try:
             return path.stat().st_mtime
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Failed to get mtime for {path}: {e}")
             return None
 
-    def check_files(self):
-        changes = []
+    def check_files(self) -> List[str]:
+        """Compares current state to previous metadata, returns list of change descriptions."""
+        changes: List[str] = []
         current_state = self._scan_directory()
 
         for path, new_meta in current_state.items():
@@ -102,24 +123,39 @@ class FileMonitor:
                 changes.append(f"File deleted: {old_path}")
 
         if changes:
-            self.logger.warning(f"{len(changes)} file system change(s) detected.")
-            for change in changes:
-                self.logger.info(change)
+            self.logger.warning(f"{len(changes)} file change(s) detected.")
+            for c in changes:
+                self.logger.info(c)
+        else:
+            self.logger.info("No changes detected in monitored files.")
 
         self.files_metadata = current_state
         return changes
 
-    def snapshot_to_json(self, output_path: str):
+    def snapshot_to_json(self, output_path: str) -> bool:
+        """Exports current state of the monitored directory to a JSON snapshot file."""
         try:
             snapshot = {
                 "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                 "watch_dir": str(self.watch_dir),
-                "files": self.files_metadata,
+                "hash_algorithm": self.hash_algorithm,
+                "track_extensions": list(self.track_extensions),
+                "include_timestamps": self.include_timestamps,
+                "file_count": len(self.files_metadata),
+                "files": self.files_metadata
             }
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                import json
+            output_file = Path(output_path)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            with output_file.open("w", encoding="utf-8") as f:
                 json.dump(snapshot, f, indent=2)
-            self.logger.info(f"Snapshot written to {output_path}")
+            self.logger.info(f"Snapshot exported to {output_file}")
+            return True
         except Exception as e:
-            self.logger.error(f"Failed to write snapshot: {e}")
+            self.logger.error(f"Failed to export snapshot: {e}")
+            return False
+
+    def reset_metadata(self):
+        """Manually re-scan and reset internal file state."""
+        self.logger.info("Resetting file monitor state...")
+        self.files_metadata = self._scan_directory()
+        self.logger.info(f"File monitor state reset with {len(self.files_metadata)} entries.")
