@@ -12,25 +12,28 @@ class ProcessMonitor:
         extra_keywords: Optional[List[str]] = None,
         log_file: Optional[str] = None,
         track_system_processes: bool = False,
+        silent: bool = False,
     ):
         """
-        Initializes the process monitor with predefined suspicious keywords.
-        :param extra_keywords: Optional list of additional suspicious terms.
-        :param log_file: Optional path to store detection logs.
-        :param track_system_processes: If False, skips PID 0–4 (system idle, kernel).
+        Initializes the process monitor with suspicious keyword list and optional logging.
+        :param extra_keywords: List of additional keywords to monitor.
+        :param log_file: Path to a file where suspicious detections are logged.
+        :param track_system_processes: Whether to include system-level PIDs (0-4).
+        :param silent: If True, disables console output.
         """
-        default_keywords = {
-            "malware", "exploit", "trojan", "keylogger",
-            "meterpreter", "cobalt", "empire", "rundll32",
-            "regsvr32", "mshta", "powersploit", "netcat",
+        base_keywords = {
+            "malware", "exploit", "trojan", "keylogger", "meterpreter",
+            "cobalt", "empire", "rundll32", "regsvr32", "mshta",
+            "powersploit", "netcat", "mimikatz", "beacon", "dump", "invoke"
         }
 
         if extra_keywords:
-            default_keywords.update(map(str.lower, extra_keywords))
+            base_keywords.update(map(str.lower, extra_keywords))
 
-        self.suspicious_keywords: Set[str] = default_keywords
-        self.log_file: Optional[Path] = Path(log_file).resolve() if log_file else None
+        self.suspicious_keywords: Set[str] = base_keywords
         self.track_system = track_system_processes
+        self.log_file: Optional[Path] = Path(log_file).resolve() if log_file else None
+        self.silent = silent
         self._lock = Lock()
 
         self.logger = logging.getLogger("ProcessMonitor")
@@ -43,25 +46,27 @@ class ProcessMonitor:
 
     def _log_detection(self, message: str):
         timestamp = datetime.utcnow().isoformat(timespec="seconds")
-        log_line = f"[{timestamp}] {message}"
+        log_entry = f"[{timestamp}] {message}"
 
         if self.log_file:
             try:
                 self.log_file.parent.mkdir(parents=True, exist_ok=True)
                 with self._lock, self.log_file.open("a", encoding="utf-8") as f:
-                    f.write(log_line + "\n")
+                    f.write(log_entry + "\n")
             except Exception as e:
-                self.logger.exception(f"[ProcessMonitor] Failed to write log: {e}")
-        else:
-            self.logger.warning(log_line)
+                self.logger.exception(f"[ProcessMonitor] Log write failed: {e}")
 
-    def check_processes(self, include_cmdline: bool = False) -> List[str]:
+        if not self.silent:
+            self.logger.warning(log_entry)
+
+    def check_processes(self, include_cmdline: bool = False, return_raw: bool = False) -> List[str]:
         """
-        Scans running processes for suspicious patterns.
-        :param include_cmdline: Whether to scan command-line arguments.
-        :return: List of detection messages.
+        Scans all running processes and detects matches against suspicious keywords.
+        :param include_cmdline: Whether to inspect command-line arguments.
+        :param return_raw: If True, also return full process metadata as dicts.
+        :return: List of detection messages or raw result tuples.
         """
-        detections: List[str] = []
+        detections = []
 
         for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
             try:
@@ -73,39 +78,57 @@ class ProcessMonitor:
                 exe = (proc.info.get('exe') or "").lower()
                 cmdline = " ".join(proc.info.get('cmdline') or []).lower()
 
-                indicators = []
+                matched_sources = []
 
                 if any(k in name for k in self.suspicious_keywords):
-                    indicators.append("name")
+                    matched_sources.append("name")
 
                 if any(k in exe for k in self.suspicious_keywords):
-                    indicators.append("exe")
+                    matched_sources.append("exe")
 
                 if include_cmdline and any(k in cmdline for k in self.suspicious_keywords):
-                    indicators.append("cmdline")
+                    matched_sources.append("cmdline")
 
-                if indicators:
+                if matched_sources:
+                    short_label = name or Path(exe).name or "[unknown]"
                     summary = (
-                        f"[DETECTED] PID {pid} via {', '.join(indicators)}: "
-                        f"{name or Path(exe).name or '[unknown]'}"
+                        f"[DETECTED] PID {pid} via {', '.join(matched_sources)}: {short_label}"
                     )
-                    detections.append(summary)
                     self._log_detection(summary)
+
+                    if return_raw:
+                        detections.append({
+                            "pid": pid,
+                            "match": matched_sources,
+                            "name": name,
+                            "exe": exe,
+                            "cmdline": cmdline
+                        })
+                    else:
+                        detections.append(summary)
 
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
             except Exception as e:
-                self.logger.exception(f"[ProcessMonitor] Failed on PID {getattr(proc, 'pid', '?')}: {e}")
+                self.logger.exception(f"[ProcessMonitor] Exception on PID {getattr(proc, 'pid', '?')}: {e}")
 
-        if not detections:
-            self.logger.info("Process check complete: no suspicious activity found.")
+        if not detections and not self.silent:
+            self.logger.info("Process scan complete: no suspicious activity found.")
 
         return detections
 
     def list_keywords(self) -> List[str]:
+        """Returns sorted list of current suspicious keywords."""
         return sorted(self.suspicious_keywords)
 
     def add_keywords(self, new_terms: List[str]):
+        """Adds one or more keywords to monitor set."""
+        added = 0
         for term in new_terms:
-            self.suspicious_keywords.add(term.lower().strip())
-        self.logger.info(f"ProcessMonitor: added {len(new_terms)} new keyword(s).")
+            term = term.strip().lower()
+            if term and term not in self.suspicious_keywords:
+                self.suspicious_keywords.add(term)
+                added += 1
+
+        if added:
+            self.logger.info(f"[ProcessMonitor] Added {added} new keyword(s): {', '.join(new_terms)}")
