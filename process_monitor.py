@@ -3,14 +3,14 @@ import logging
 from datetime import datetime
 from threading import Lock
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Union
 
 
 class ProcessMonitor:
     def __init__(
         self,
         extra_keywords: Optional[List[str]] = None,
-        log_file: Optional[str] = None,
+        log_file: Optional[Union[str, Path]] = None,
         track_system_processes: bool = False,
         silent: bool = False,
     ):
@@ -24,7 +24,8 @@ class ProcessMonitor:
         base_keywords = {
             "malware", "exploit", "trojan", "keylogger", "meterpreter",
             "cobalt", "empire", "rundll32", "regsvr32", "mshta",
-            "powersploit", "netcat", "mimikatz", "beacon", "dump", "invoke"
+            "powersploit", "netcat", "mimikatz", "beacon", "dump",
+            "invoke", "reverse", "shell", "backdoor", "payload"
         }
 
         if extra_keywords:
@@ -59,12 +60,19 @@ class ProcessMonitor:
         if not self.silent:
             self.logger.warning(log_entry)
 
-    def check_processes(self, include_cmdline: bool = False, return_raw: bool = False) -> List[str]:
+    def _normalize(self, value: Optional[Union[str, List[str]]]) -> str:
+        if isinstance(value, list):
+            return " ".join(value).lower()
+        if isinstance(value, str):
+            return value.lower()
+        return ""
+
+    def check_processes(self, include_cmdline: bool = False, return_raw: bool = False) -> List[Union[str, dict]]:
         """
         Scans all running processes and detects matches against suspicious keywords.
         :param include_cmdline: Whether to inspect command-line arguments.
         :param return_raw: If True, also return full process metadata as dicts.
-        :return: List of detection messages or raw result tuples.
+        :return: List of detection messages or raw result dicts.
         """
         detections = []
 
@@ -74,9 +82,9 @@ class ProcessMonitor:
                 if not self.track_system and pid <= 4:
                     continue
 
-                name = (proc.info.get('name') or "").lower()
-                exe = (proc.info.get('exe') or "").lower()
-                cmdline = " ".join(proc.info.get('cmdline') or []).lower()
+                name = self._normalize(proc.info.get('name'))
+                exe = self._normalize(proc.info.get('exe'))
+                cmdline = self._normalize(proc.info.get('cmdline'))
 
                 matched_sources = []
 
@@ -91,9 +99,7 @@ class ProcessMonitor:
 
                 if matched_sources:
                     short_label = name or Path(exe).name or "[unknown]"
-                    summary = (
-                        f"[DETECTED] PID {pid} via {', '.join(matched_sources)}: {short_label}"
-                    )
+                    summary = f"[DETECTED] PID {pid} via {', '.join(matched_sources)}: {short_label}"
                     self._log_detection(summary)
 
                     if return_raw:
@@ -125,10 +131,22 @@ class ProcessMonitor:
         """Adds one or more keywords to monitor set."""
         added = 0
         for term in new_terms:
-            term = term.strip().lower()
-            if term and term not in self.suspicious_keywords:
-                self.suspicious_keywords.add(term)
+            clean = term.strip().lower()
+            if clean and clean not in self.suspicious_keywords:
+                self.suspicious_keywords.add(clean)
                 added += 1
 
         if added:
             self.logger.info(f"[ProcessMonitor] Added {added} new keyword(s): {', '.join(new_terms)}")
+
+    def remove_keywords(self, terms: List[str]):
+        """Removes specified keywords from the set."""
+        removed = 0
+        for term in terms:
+            clean = term.strip().lower()
+            if clean in self.suspicious_keywords:
+                self.suspicious_keywords.remove(clean)
+                removed += 1
+
+        if removed:
+            self.logger.info(f"[ProcessMonitor] Removed {removed} keyword(s): {', '.join(terms)}")
