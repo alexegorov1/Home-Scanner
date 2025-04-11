@@ -2,38 +2,59 @@ import psutil
 import logging
 from datetime import datetime
 from threading import Lock
+from pathlib import Path
+from typing import List, Optional, Set
+
 
 class ProcessMonitor:
-    def __init__(self, extra_keywords=None, log_file=None):
+    def __init__(self, extra_keywords: Optional[List[str]] = None, log_file: Optional[str] = None):
         """
         Initialize the process monitor with predefined suspicious keywords.
         :param extra_keywords: Optional list of additional suspicious terms.
         :param log_file: Optional path to log detected processes.
         """
-        default_keywords = {"malware", "exploit", "trojan", "keylogger", "meterpreter", "cobalt", "empire"}
+        base_keywords = {
+            "malware", "exploit", "trojan", "keylogger",
+            "meterpreter", "cobalt", "empire", "shellcode",
+            "powersploit", "rundll32", "regsvr32", "mshta",
+        }
+
         if extra_keywords:
-            default_keywords.update(map(str.lower, extra_keywords))
-        self.suspicious_keywords = default_keywords
-        self.log_file = log_file
+            base_keywords.update(map(str.lower, extra_keywords))
+
+        self.suspicious_keywords: Set[str] = base_keywords
+        self.log_file: Optional[Path] = Path(log_file).resolve() if log_file else None
         self._lock = Lock()
 
-    def _log_detection(self, message: str):
-        if not self.log_file:
-            logging.warning(f"[ProcessMonitor] {message}")
-            return
-        try:
-            with self._lock, open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.utcnow().isoformat(timespec='seconds')}] {message}\n")
-        except Exception as e:
-            logging.exception(f"[ProcessMonitor] Failed to write log: {e}")
+        self.logger = logging.getLogger("ProcessMonitor")
+        self.logger.setLevel(logging.INFO)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
 
-    def check_processes(self, include_cmdline=False):
+    def _log_detection(self, message: str):
+        timestamp = datetime.utcnow().isoformat(timespec="seconds")
+        entry = f"[{timestamp}] {message}"
+
+        if self.log_file:
+            try:
+                self.log_file.parent.mkdir(parents=True, exist_ok=True)
+                with self._lock, self.log_file.open("a", encoding="utf-8") as f:
+                    f.write(entry + "\n")
+            except Exception as e:
+                self.logger.exception(f"[ProcessMonitor] Failed to write to log file: {e}")
+        else:
+            self.logger.warning(entry)
+
+    def check_processes(self, include_cmdline: bool = False) -> List[str]:
         """
-        Scan running processes for suspicious names or command-line args.
+        Scan running processes for suspicious names or command-line arguments.
         :param include_cmdline: If True, also inspect the command line of processes.
-        :return: List of detected suspicious processes (as formatted strings).
+        :return: List of detected suspicious processes (formatted strings).
         """
-        suspicious = []
+        suspicious: List[str] = []
 
         for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
             try:
@@ -42,25 +63,46 @@ class ProcessMonitor:
                 exe = (proc.info.get('exe') or "").lower()
                 cmdline = " ".join(proc.info.get('cmdline') or []).lower()
 
-                detection_sources = []
+                match_sources = []
 
                 if any(k in name for k in self.suspicious_keywords):
-                    detection_sources.append("name")
+                    match_sources.append("name")
 
                 if any(k in exe for k in self.suspicious_keywords):
-                    detection_sources.append("exe")
+                    match_sources.append("exe")
 
                 if include_cmdline and any(k in cmdline for k in self.suspicious_keywords):
-                    detection_sources.append("cmdline")
+                    match_sources.append("cmdline")
 
-                if detection_sources:
-                    summary = f"[DETECTED] Suspicious process (PID {pid}) via {', '.join(detection_sources)}: {name or exe or '[unknown]'}"
+                if match_sources:
+                    short_name = name or Path(exe).name or "[unknown]"
+                    summary = (
+                        f"[DETECTED] Suspicious process (PID {pid}) via {', '.join(match_sources)}: {short_name}"
+                    )
                     suspicious.append(summary)
                     self._log_detection(summary)
 
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
             except Exception as e:
-                logging.exception(f"[ProcessMonitor] Unexpected error scanning PID {proc.pid}: {e}")
+                self.logger.exception(f"[ProcessMonitor] Unexpected error for PID {proc.pid}: {e}")
+
+        if not suspicious:
+            self.logger.info("Process scan completed: no suspicious activity detected.")
 
         return suspicious
+
+    def list_tracked_keywords(self) -> List[str]:
+        """
+        Return sorted list of all keywords currently used for detection.
+        """
+        return sorted(self.suspicious_keywords)
+
+    def add_keyword(self, keyword: str):
+        """
+        Dynamically add a new keyword to detection list.
+        """
+        keyword = keyword.lower().strip()
+        if keyword:
+            self.suspicious_keywords.add(keyword)
+            self.logger.info(f"Keyword added to process monitor: '{keyword}'")
