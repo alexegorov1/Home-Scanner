@@ -3,7 +3,7 @@ import socket
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 
 class NetworkScanner:
@@ -37,7 +37,8 @@ class NetworkScanner:
         ports: Optional[List[int]] = None,
         timeout: float = 1.0,
         resolve_hostname: bool = True,
-        banner_grab_enabled: bool = True
+        banner_grab_enabled: bool = True,
+        log_file: Optional[Union[str, Path]] = None
     ):
         self.target = target
         self.ports = ports or list(self.COMMON_PORTS.keys())
@@ -45,16 +46,19 @@ class NetworkScanner:
         self.resolve_hostname = resolve_hostname
         self.banner_grab_enabled = banner_grab_enabled
         self.results: List[Dict] = []
-        self.logger = logging.getLogger("NetworkScanner")
+
+        self.logger = logging.getLogger(f"NetworkScanner:{self.target}")
         self.logger.setLevel(logging.INFO)
+
         if not self.logger.handlers:
-            handler = logging.StreamHandler()
+            handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
 
     async def scan(self) -> List[Dict]:
         self.results.clear()
+
         try:
             if self.resolve_hostname:
                 resolved = socket.gethostbyname(self.target)
@@ -67,7 +71,7 @@ class NetworkScanner:
         start = datetime.utcnow()
         await self._scan_ports()
         duration = (datetime.utcnow() - start).total_seconds()
-        self.logger.info(f"Scan complete in {duration:.2f} seconds with {len(self.results)} result(s)")
+        self.logger.info(f"Scan complete in {duration:.2f} seconds. {len(self.results)} open ports detected.")
         return self.results
 
     async def _scan_ports(self):
@@ -79,6 +83,7 @@ class NetworkScanner:
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self.target, port), timeout=self.timeout
             )
+
             banner = await self._grab_banner(reader) if self.banner_grab_enabled else ""
             writer.close()
             await writer.wait_closed()
@@ -105,7 +110,8 @@ class NetworkScanner:
         try:
             banner = await asyncio.wait_for(reader.read(1024), timeout=0.5)
             return banner.decode(errors="ignore")
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Banner grab failed: {e}")
             return ""
 
     def _analyze_threat(self, port: int, banner: str) -> str:
@@ -114,12 +120,17 @@ class NetworkScanner:
             return f"Open port {port}, unknown service"
 
         banner_lower = banner.lower()
+        indicators = []
+
         if "unauthorized" in banner_lower or "login" in banner_lower:
-            return f"{base_threat} + Possible weak authentication"
-        if any(keyword in banner_lower for keyword in ("apache", "nginx", "iis")):
-            return f"{base_threat} + Public web stack exposed"
+            indicators.append("weak auth")
+        if any(k in banner_lower for k in ("apache", "nginx", "iis")):
+            indicators.append("web server")
         if "openssl" in banner_lower or "tls" in banner_lower:
-            return f"{base_threat} + TLS stack fingerprinted"
+            indicators.append("tls info")
+
+        if indicators:
+            return f"{base_threat} + {' | '.join(indicators)}"
 
         return base_threat
 
@@ -127,17 +138,19 @@ class NetworkScanner:
         try:
             file_path = Path(file_path)
             file_path.parent.mkdir(parents=True, exist_ok=True)
+
             with file_path.open("w", encoding="utf-8") as f:
                 for entry in sorted(self.results, key=lambda x: x["port"]):
                     line = (
-                        f"{entry['timestamp']} | {entry['port']}/{entry['service']} | "
+                        f"{entry['timestamp']} | Port {entry['port']}/{entry['service']} | "
                         f"Threat: {entry['threat']} | Banner: {entry['banner']}\n"
                     )
                     f.write(line)
-            self.logger.info(f"Results exported to {file_path}")
+
+            self.logger.info(f"Scan results exported to {file_path}")
             return True
         except Exception as e:
-            self.logger.error(f"Failed to export results: {e}")
+            self.logger.error(f"Failed to export results to {file_path}: {e}")
             return False
 
     def summarize(self) -> Dict[str, int]:
@@ -152,6 +165,7 @@ class NetworkScanner:
         if not summary:
             self.logger.info("No threats detected.")
             return
+
         self.logger.info("Threat summary:")
         for threat, count in summary.items():
-            self.logger.info(f"{threat}: {count}")
+            self.logger.info(f"  {threat}: {count}")
