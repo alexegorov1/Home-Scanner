@@ -39,37 +39,45 @@ class NetworkScanner:
         timeout: float = 1.0,
         resolve_hostname: bool = True,
         banner_grab_enabled: bool = True,
-        log_file: Optional[Union[str, Path]] = None
+        log_file: Optional[Union[str, Path]] = None,
+        only_known_services: bool = False,
+        exclude_ports: Optional[List[int]] = None,
+        include_closed_ports: bool = False
     ):
         self.target = target
-        self.ports = ports or list(self.COMMON_PORTS.keys())
+        self.ports = [p for p in (ports or list(self.COMMON_PORTS.keys())) if not exclude_ports or p not in exclude_ports]
         self.timeout = timeout
         self.resolve_hostname = resolve_hostname
         self.banner_grab_enabled = banner_grab_enabled
+        self.only_known_services = only_known_services
+        self.include_closed_ports = include_closed_ports
         self.results: List[Dict] = []
 
         self.logger = logging.getLogger(f"NetworkScanner:{self.target}")
         self.logger.setLevel(logging.INFO)
 
-        if not self.logger.handlers:
-            handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
+        if not any(isinstance(h, logging.StreamHandler) or isinstance(h, logging.FileHandler)
+                   for h in self.logger.handlers):
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            self.logger.addHandler(stream_handler)
+            if log_file:
+                file_handler = logging.FileHandler(log_file, encoding="utf-8")
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
 
     async def scan(self) -> List[Dict]:
         self.results.clear()
-        ip = self.target
+        try:
+            if self.resolve_hostname:
+                resolved = socket.gethostbyname(self.target)
+                self.logger.info(f"Resolved {self.target} to {resolved}")
+        except socket.gaierror:
+            self.logger.error(f"DNS resolution failed for {self.target}")
+            return [{"error": "Unresolved hostname"}]
 
-        if self.resolve_hostname:
-            try:
-                ip = socket.gethostbyname(self.target)
-                self.logger.info(f"Resolved {self.target} to {ip}")
-            except socket.gaierror:
-                self.logger.error(f"DNS resolution failed for {self.target}")
-                return [{"error": "Unresolved hostname"}]
-
-        self.logger.info(f"Starting async port scan on {ip}")
+        self.logger.info(f"Starting port scan on {self.target} with {len(self.ports)} port(s)")
         start = datetime.utcnow()
         await self._scan_ports()
         elapsed = (datetime.utcnow() - start).total_seconds()
@@ -77,8 +85,7 @@ class NetworkScanner:
         return self.results
 
     async def _scan_ports(self):
-        tasks = [self._scan_port(port) for port in self.ports]
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*(self._scan_port(port) for port in self.ports))
 
     async def _scan_port(self, port: int):
         try:
@@ -90,12 +97,19 @@ class NetworkScanner:
             writer.close()
             await writer.wait_closed()
 
-            self.results.append(self._build_result(port, banner))
+            result = self._build_result(port, banner)
+            if self.only_known_services and result["service"] == "Unknown":
+                return
+            self.results.append(result)
 
-        except asyncio.TimeoutError:
-            self.logger.debug(f"Timeout on port {port}")
-        except ConnectionRefusedError:
-            self.logger.debug(f"Connection refused on port {port}")
+        except (asyncio.TimeoutError, ConnectionRefusedError):
+            if self.include_closed_ports:
+                self.results.append({
+                    "port": port,
+                    "service": self.COMMON_PORTS.get(port, "Unknown"),
+                    "status": "closed",
+                    "timestamp": datetime.utcnow().isoformat(timespec="seconds")
+                })
         except Exception as e:
             self.logger.warning(f"Unexpected error on port {port}: {e}")
 
@@ -115,6 +129,7 @@ class NetworkScanner:
             "service": service,
             "banner": banner.strip() or "N/A",
             "threat": threat,
+            "status": "open",
             "timestamp": datetime.utcnow().isoformat(timespec="seconds")
         }
 
@@ -132,42 +147,42 @@ class NetworkScanner:
 
         return f"{base} + {' | '.join(indicators)}" if indicators else base
 
-    def export_results_text(self, path: Union[str, Path]) -> bool:
-        try:
-            path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-
-            with path.open("w", encoding="utf-8") as f:
-                for entry in sorted(self.results, key=lambda x: x["port"]):
-                    f.write(
-                        f"{entry['timestamp']} | Port {entry['port']}/{entry['service']} | "
-                        f"Threat: {entry['threat']} | Banner: {entry['banner']}\n"
-                    )
-
-            self.logger.info(f"Scan results exported to {path}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to export results: {e}")
-            return False
-
     def export_results_json(self, path: Union[str, Path]) -> bool:
         try:
             path = Path(path)
             path.parent.mkdir(parents=True, exist_ok=True)
-
             with path.open("w", encoding="utf-8") as f:
                 json.dump(self.results, f, indent=2)
-
-            self.logger.info(f"Results exported as JSON to {path}")
+            self.logger.info(f"Exported results as JSON to {path}")
             return True
         except Exception as e:
             self.logger.error(f"Failed to export JSON: {e}")
             return False
 
+    def export_results_text(self, path: Union[str, Path]) -> bool:
+        try:
+            path = Path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("w", encoding="utf-8") as f:
+                for r in sorted(self.results, key=lambda x: x["port"]):
+                    status = r.get("status", "open")
+                    line = (
+                        f"{r['timestamp']} | Port {r['port']}/{r['service']} ({status}) | "
+                        f"Threat: {r.get('threat', 'N/A')} | Banner: {r.get('banner', '-')}\n"
+                    )
+                    f.write(line)
+            self.logger.info(f"Exported results as text to {path}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to export text: {e}")
+            return False
+
     def summarize(self) -> Dict[str, int]:
         summary = {}
         for r in self.results:
-            summary[r["threat"]] = summary.get(r["threat"], 0) + 1
+            if r.get("status") == "open":
+                threat = r.get("threat", "Uncategorized")
+                summary[threat] = summary.get(threat, 0) + 1
         return summary
 
     def print_summary(self):
