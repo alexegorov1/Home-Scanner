@@ -1,10 +1,9 @@
 import socket
 import ipaddress
 
-def reverse_dns(ip: str) -> str:
+def reverse_dns(ip: str) -> Optional[str]:
     try:
-        ipaddress.ip_address(ip)
-        hostname, _, _ = socket.gethostbyaddr(ip)
-        return hostname
+        ip_obj = ipaddress.ip_address(ip)
+        return socket.gethostbyaddr(str(ip_obj))[0]
     except (socket.herror, socket.gaierror, ValueError):
         return None
