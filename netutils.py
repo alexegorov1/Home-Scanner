@@ -4,17 +4,16 @@ from typing import Optional
 
 
 def reverse_dns(ip: str, timeout: float = 1.0) -> Optional[str]:
+    ip = ip.strip()
+    if not ip:
+        return None
     try:
-        ip = ip.strip()
-        if not ip:
-            return None
-
         ipaddress.ip_address(ip)
-        original_timeout = socket.getdefaulttimeout()
+        prev_timeout = socket.getdefaulttimeout()
         socket.setdefaulttimeout(timeout)
-        hostname = socket.gethostbyaddr(ip)[0]
-        socket.setdefaulttimeout(original_timeout)
-        return hostname
-
+        try:
+            return socket.gethostbyaddr(ip)[0]
+        finally:
+            socket.setdefaulttimeout(prev_timeout)
     except (ValueError, socket.herror, socket.gaierror, OSError):
         return None
