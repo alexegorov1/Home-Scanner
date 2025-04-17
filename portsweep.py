@@ -3,13 +3,15 @@ from typing import List
 
 
 def sweep_host_ports(ip: str, ports: List[int], timeout: float = 0.5) -> List[int]:
-    open_ports = []
-    for port in ports:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
-            try:
-                s.connect((ip, port))
-                open_ports.append(port)
-            except (socket.timeout, ConnectionRefusedError, OSError):
-                continue
-    return open_ports
+    return [
+        port for port in ports
+        if _is_port_open(ip, port, timeout)
+    ]
+
+
+def _is_port_open(ip: str, port: int, timeout: float) -> bool:
+    try:
+        with socket.create_connection((ip, port), timeout=timeout):
+            return True
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False
