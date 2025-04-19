@@ -1,17 +1,30 @@
 import socket
-from typing import List
+from typing import List, Dict, Tuple, Optional
 
 
-def sweep_host_ports(ip: str, ports: List[int], timeout: float = 0.5) -> List[int]:
-    return [port for port in ports if _is_port_open(ip, port, timeout)]
+def sweep_host_ports(ip: str, ports: List[int], timeout: float = 0.5, grab_banner: bool = False) -> List[Union[int, Tuple[int, str]]]:
+    results = []
+    for port in ports:
+        banner = _try_port(ip, port, timeout, grab_banner)
+        if banner is not None:
+            results.append((port, banner) if grab_banner else port)
+    return results
 
 
-def _is_port_open(ip: str, port: int, timeout: float) -> bool:
+def _try_port(ip: str, port: int, timeout: float, grab_banner: bool) -> Optional[str]:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
-        return sock.connect_ex((ip, port)) == 0
+        if sock.connect_ex((ip, port)) == 0:
+            if grab_banner:
+                try:
+                    sock.settimeout(0.3)
+                    data = sock.recv(1024)
+                    return data.decode(errors="ignore").strip() or "N/A"
+                except Exception:
+                    return "N/A"
+            return ""
     except socket.error:
-        return False
+        return None
     finally:
         sock.close()
