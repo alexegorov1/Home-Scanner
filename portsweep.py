@@ -8,8 +8,10 @@ def sweep_host_ports(ip: str, ports: List[int], timeout: float = 0.5) -> List[in
 
 def _is_port_open(ip: str, port: int, timeout: float) -> bool:
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(timeout)
-            return sock.connect_ex((ip, port)) == 0
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((ip, port)) == 0
+        sock.close()
+        return result
     except socket.error:
         return False
