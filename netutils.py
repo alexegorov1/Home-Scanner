@@ -1,16 +1,19 @@
 import socket
 import ipaddress
-from typing import Optional
+from typing import Optional, Union, Dict
 
 
-def reverse_dns(ip: str, timeout: float = 1.0) -> Optional[str]:
+def reverse_dns(ip: str, timeout: float = 1.0, detailed: bool = False) -> Optional[Union[str, Dict[str, Union[str, list]]]]:
     ip = ip.strip()
     if not ip:
         return None
 
     try:
         with _SocketTimeout(timeout):
-            return socket.gethostbyaddr(str(ipaddress.ip_address(ip)))[0]
+            hostname, aliases, _ = socket.gethostbyaddr(str(ipaddress.ip_address(ip)))
+            if detailed:
+                return {"hostname": hostname, "aliases": aliases}
+            return hostname
     except (ValueError, socket.herror, socket.gaierror, OSError):
         return None
 
