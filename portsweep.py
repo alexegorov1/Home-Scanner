@@ -1,13 +1,26 @@
 import socket
-from typing import List, Dict, Tuple, Optional
+from typing import List, Tuple, Union, Optional, Dict
 
 
-def sweep_host_ports(ip: str, ports: List[int], timeout: float = 0.5, grab_banner: bool = False) -> List[Union[int, Tuple[int, str]]]:
+def sweep_host_ports(
+    ip: str,
+    ports: List[int],
+    timeout: float = 0.5,
+    grab_banner: bool = False,
+    detailed: bool = False
+) -> Union[List[int], List[Tuple[int, str]], List[Dict[str, Union[int, str]]]]:
     results = []
     for port in ports:
         banner = _try_port(ip, port, timeout, grab_banner)
         if banner is not None:
-            results.append((port, banner) if grab_banner else port)
+            if detailed:
+                results.append({
+                    "port": port,
+                    "status": "open",
+                    "banner": banner if grab_banner else ""
+                })
+            else:
+                results.append((port, banner) if grab_banner else port)
     return results
 
 
