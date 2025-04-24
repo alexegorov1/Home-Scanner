@@ -11,10 +11,11 @@ def sweep_host_ports(
 ) -> Union[List[int], List[Tuple[int, str]], List[Dict[str, Union[int, str]]]]:
     results = []
     for port in ports:
-        banner = _try_port(ip, port, timeout, grab_banner)
+        banner = _check_port(ip, port, timeout, grab_banner)
         if banner is not None:
             if detailed:
                 results.append({
+                    "ip": ip,
                     "port": port,
                     "status": "open",
                     "banner": banner if grab_banner else ""
@@ -24,11 +25,13 @@ def sweep_host_ports(
     return results
 
 
-def _try_port(ip: str, port: int, timeout: float, grab_banner: bool) -> Optional[str]:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(timeout)
+def _check_port(ip: str, port: int, timeout: float, grab_banner: bool) -> Optional[str]:
     try:
-        if sock.connect_ex((ip, port)) == 0:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            if sock.connect_ex((ip, port)) != 0:
+                return None
+
             if grab_banner:
                 try:
                     sock.settimeout(0.3)
@@ -39,5 +42,3 @@ def _try_port(ip: str, port: int, timeout: float, grab_banner: bool) -> Optional
             return ""
     except socket.error:
         return None
-    finally:
-        sock.close()
