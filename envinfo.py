@@ -6,30 +6,26 @@ from typing import Dict
 
 
 def get_env_info() -> Dict[str, str]:
-    info = {}
-
     try:
-        info["os"] = platform.system()
-        info["os_version"] = platform.version()
-        info["architecture"] = platform.machine()
-        info["hostname"] = platform.node()
-        info["local_ip"] = _get_local_ip()
-        info["cpu_count"] = str(multiprocessing.cpu_count())
-        info["cwd"] = os.getcwd()
-        info["virtualized"] = _detect_virtualization()
+        return {
+            "os": platform.system(),
+            "os_version": platform.version(),
+            "architecture": platform.machine(),
+            "hostname": platform.node(),
+            "local_ip": _get_local_ip(),
+            "cpu_count": str(multiprocessing.cpu_count()),
+            "cwd": os.getcwd(),
+            "virtualized": _detect_virtualization()
+        }
     except Exception as e:
-        info["error"] = f"Failed to gather environment info: {e}"
-
-    return info
+        return {"error": f"Failed to gather environment info: {e}"}
 
 
 def _get_local_ip() -> str:
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
     except Exception:
         return "unknown"
 
@@ -38,8 +34,9 @@ def _detect_virtualization() -> str:
     try:
         if platform.system() == "Linux":
             with open("/proc/cpuinfo", "r") as f:
-                if any("hypervisor" in line.lower() for line in f):
-                    return "yes"
+                for line in f:
+                    if "hypervisor" in line.lower():
+                        return "yes"
         return "no"
     except Exception:
         return "unknown"
