@@ -9,6 +9,7 @@ def get_env_info() -> Dict[str, str]:
     try:
         return {
             "os": platform.system(),
+            "os_release": platform.release(),
             "os_version": platform.version(),
             "architecture": platform.machine(),
             "hostname": platform.node(),
@@ -34,7 +35,9 @@ def _detect_virtualization() -> str:
     try:
         if platform.system() == "Linux":
             with open("/proc/cpuinfo", "r") as f:
-                return "yes" if any("hypervisor" in line.lower() for line in f) else "no"
-        return "unknown"
+                content = f.read().lower()
+                if "hypervisor" in content or "kvm" in content or "vmware" in content:
+                    return "yes"
+        return "no"
     except Exception:
         return "unknown"
