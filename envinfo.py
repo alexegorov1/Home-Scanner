@@ -15,7 +15,7 @@ def get_env_info() -> Dict[str, str]:
             "hostname": platform.node(),
             "local_ip": _get_local_ip(),
             "cpu_count": str(multiprocessing.cpu_count()),
-            "cwd": os.path.abspath(os.getcwd()),
+            "cwd": os.path.realpath(os.getcwd()),
             "virtualized": _detect_virtualization()
         }
     except Exception as e:
@@ -33,9 +33,9 @@ def _get_local_ip() -> str:
 def _detect_virtualization() -> str:
     try:
         if platform.system() == "Linux":
-            with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
                 text = f.read().lower()
-                if any(x in text for x in ("hypervisor", "kvm", "vmware", "xen", "qemu")):
+                if any(term in text for term in ("hypervisor", "kvm", "vmware", "xen", "qemu")):
                     return "yes"
         return "no"
     except Exception:
