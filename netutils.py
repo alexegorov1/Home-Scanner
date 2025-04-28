@@ -8,8 +8,11 @@ def reverse_dns(
     timeout: float = 1.0,
     detailed: bool = False
 ) -> Optional[Union[str, Dict[str, Union[str, List[str]]]]]:
+    ip = ip.strip()
+    if not ip:
+        return None
     try:
-        ip_obj = ipaddress.ip_address(ip.strip())
+        ip_obj = ipaddress.ip_address(ip)
         with _SocketTimeout(timeout):
             hostname, aliases, _ = socket.gethostbyaddr(str(ip_obj))
             if detailed:
