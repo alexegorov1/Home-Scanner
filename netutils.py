@@ -14,14 +14,14 @@ def reverse_dns(
     try:
         ip_obj = ipaddress.ip_address(ip)
         with _SocketTimeout(timeout):
-            hostname, aliases, _ = socket.gethostbyaddr(str(ip_obj))
-            if detailed:
-                return {
-                    "ip": str(ip_obj),
-                    "hostname": hostname,
-                    "aliases": aliases or []
-                }
-            return hostname
+            result = socket.gethostbyaddr(str(ip_obj))
+        if detailed:
+            return {
+                "ip": str(ip_obj),
+                "hostname": result[0],
+                "aliases": result[1] or []
+            }
+        return result[0]
     except (ValueError, socket.herror, socket.gaierror, OSError):
         return None
 
