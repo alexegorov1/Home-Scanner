@@ -16,11 +16,11 @@ def sweep_host_ports(
 ]:
     return [
         result for port in ports
-        if (result := _check_port(ip, port, timeout, grab_banner, detailed)) is not None
+        if (result := _scan_port(ip, port, timeout, grab_banner, detailed)) is not None
     ]
 
 
-def _check_port(
+def _scan_port(
     ip: str,
     port: int,
     timeout: float,
@@ -37,14 +37,14 @@ def _check_port(
                     banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
                 except Exception:
                     banner = "N/A"
-        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+        elapsed = round((time.perf_counter() - start) * 1000, 2)
         if detailed:
             return {
                 "ip": ip,
                 "port": port,
                 "status": "open",
                 "banner": banner if grab_banner else "",
-                "response_time_ms": elapsed_ms
+                "response_time_ms": elapsed
             }
         return (port, banner) if grab_banner else port
     except Exception:
