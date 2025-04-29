@@ -14,9 +14,10 @@ def sweep_host_ports(
     List[Tuple[int, str]],
     List[Dict[str, Union[str, int, float]]]
 ]:
-    return list(filter(None, (
-        _check_port(ip, port, timeout, grab_banner, detailed) for port in ports
-    )))
+    return [
+        result for port in ports
+        if (result := _check_port(ip, port, timeout, grab_banner, detailed)) is not None
+    ]
 
 
 def _check_port(
@@ -36,14 +37,14 @@ def _check_port(
                     banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
                 except Exception:
                     banner = "N/A"
-        elapsed_ms = (time.perf_counter() - start) * 1000
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
         if detailed:
             return {
                 "ip": ip,
                 "port": port,
                 "status": "open",
                 "banner": banner if grab_banner else "",
-                "response_time_ms": round(elapsed_ms, 2)
+                "response_time_ms": elapsed_ms
             }
         return (port, banner) if grab_banner else port
     except Exception:
