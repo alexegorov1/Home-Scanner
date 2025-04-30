@@ -90,7 +90,7 @@ if errorlevel 1 (
 goto :eof
 
 :check_internet
-powershell -Command "$ping = Test-Connection -ComputerName google.com -Count 1 -Quiet; if ($ping) { exit 0 } else { exit 1 }"
+powershell -Command "$r = Test-Connection google.com -Count 1 -Quiet; if (-not $r) { exit 1 }"
 if errorlevel 1 (
     call :color_echo red "[FAIL] No internet connection or DNS resolution failed."
 ) else (
