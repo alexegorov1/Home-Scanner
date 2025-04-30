@@ -90,7 +90,7 @@ if errorlevel 1 (
 goto :eof
 
 :check_internet
-powershell -Command "try { [Net.Dns]::GetHostEntry('www.google.com') > $null; exit 0 } catch { exit 1 }"
+powershell -Command "try { Test-Connection -ComputerName www.google.com -Count 1 -Quiet } catch { $false }"
 if errorlevel 1 (
     call :color_echo red "[FAIL] No internet connection or DNS resolution failed."
 ) else (
