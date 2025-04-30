@@ -30,7 +30,7 @@ if errorlevel 1 (
 goto :eof
 
 :check_pip
-pip --version >nul 2>&1
+%PYTHON% -m pip --version >nul 2>&1
 if errorlevel 1 (
     call :color_echo red "[FAIL] pip not found. You may not be able to install dependencies."
 ) else (
@@ -90,7 +90,7 @@ if errorlevel 1 (
 goto :eof
 
 :check_internet
-powershell -Command "try { Test-Connection -ComputerName www.google.com -Count 1 -Quiet } catch { $false }"
+powershell -Command "try { [System.Net.Dns]::GetHostEntry('google.com') > $null; exit 0 } catch { exit 1 }"
 if errorlevel 1 (
     call :color_echo red "[FAIL] No internet connection or DNS resolution failed."
 ) else (
