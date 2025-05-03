@@ -20,7 +20,7 @@ class DiskMonitor:
     def _setup_logger(self, log_file):
         logger = logging.getLogger(f"DiskMonitor:{self.path}")
         logger.setLevel(logging.INFO)
-        if not logger.handlers:
+        if not logger.hasHandlers():
             handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
             handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"))
             logger.addHandler(handler)
@@ -34,10 +34,9 @@ class DiskMonitor:
             return [msg]
         try:
             usage = shutil.disk_usage(self.path)
-            total, used, free = (usage.total, usage.used, usage.free)
             gb = lambda b: b / 1_073_741_824
-            total_gb, used_gb, free_gb = gb(total), gb(used), gb(free)
-            percent_used = (used / total) * 100
+            total_gb, used_gb, free_gb = map(gb, (usage.total, usage.used, usage.free))
+            percent_used = (usage.used / usage.total) * 100
             alerts = []
             if percent_used >= self.threshold_percent:
                 msg = f"Disk usage alert: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
