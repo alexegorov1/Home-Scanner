@@ -22,8 +22,7 @@ class DiskMonitor:
         logger.setLevel(logging.INFO)
         if not logger.handlers:
             handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
-            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-            handler.setFormatter(formatter)
+            handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"))
             logger.addHandler(handler)
         return logger
 
@@ -78,12 +77,13 @@ class DiskMonitor:
 
     def estimate_cleanup_needed(self, cleanup_target_gb):
         try:
-            usage = shutil.disk_usage(self.path)
-            free_gb = usage.free / 1_073_741_824
+            free_gb = shutil.disk_usage(self.path).free / 1_073_741_824
             needed_gb = cleanup_target_gb - free_gb
-            if needed_gb <= 0:
-                return f"No cleanup needed. Current free: {free_gb:.2f} GB"
-            return f"Cleanup required: Free at least {needed_gb:.2f} GB to meet target {cleanup_target_gb} GB"
+            return (
+                f"No cleanup needed. Current free: {free_gb:.2f} GB"
+                if needed_gb <= 0 else
+                f"Cleanup required: Free at least {needed_gb:.2f} GB to meet target {cleanup_target_gb} GB"
+            )
         except Exception as e:
             return f"Estimation failed: {e}"
 
