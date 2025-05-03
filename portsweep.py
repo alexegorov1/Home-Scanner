@@ -14,10 +14,9 @@ def sweep_host_ports(
     List[Tuple[int, str]],
     List[Dict[str, Union[str, int, float]]]
 ]:
-    return [
-        result for port in ports
-        if (result := _scan_port(ip, port, timeout, grab_banner, detailed)) is not None
-    ]
+    return list(filter(None, (
+        _scan_port(ip, port, timeout, grab_banner, detailed) for port in ports
+    )))
 
 
 def _scan_port(
@@ -35,7 +34,7 @@ def _scan_port(
                 try:
                     sock.settimeout(0.3)
                     banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
-                except Exception:
+                except:
                     banner = "N/A"
         elapsed = round((time.perf_counter() - start) * 1000, 2)
         if detailed:
@@ -47,5 +46,5 @@ def _scan_port(
                 "response_time_ms": elapsed
             }
         return (port, banner) if grab_banner else port
-    except Exception:
+    except:
         return None
