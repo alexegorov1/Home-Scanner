@@ -34,10 +34,10 @@ class DiskMonitor:
             return [msg]
         try:
             usage = shutil.disk_usage(self.path)
-            total_gb = usage.total / 1_073_741_824
-            used_gb = usage.used / 1_073_741_824
-            free_gb = usage.free / 1_073_741_824
-            percent_used = (usage.used / usage.total) * 100
+            total, used, free = (usage.total, usage.used, usage.free)
+            gb = lambda b: b / 1_073_741_824
+            total_gb, used_gb, free_gb = gb(total), gb(used), gb(free)
+            percent_used = (used / total) * 100
             alerts = []
             if percent_used >= self.threshold_percent:
                 msg = f"Disk usage alert: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
@@ -69,8 +69,7 @@ class DiskMonitor:
             "free_gb": round(free_gb, 2)
         }
         try:
-            filename = f"{int(time.time())}_disk_snapshot.json"
-            with open(os.path.join(self.snapshot_dir, filename), "w", encoding="utf-8") as f:
+            with open(os.path.join(self.snapshot_dir, f"{int(time.time())}_disk_snapshot.json"), "w", encoding="utf-8") as f:
                 json.dump(snapshot, f, indent=2)
         except Exception as e:
             self.logger.warning(f"Failed to save snapshot: {e}")
@@ -78,24 +77,21 @@ class DiskMonitor:
     def estimate_cleanup_needed(self, cleanup_target_gb):
         try:
             free_gb = shutil.disk_usage(self.path).free / 1_073_741_824
-            needed_gb = cleanup_target_gb - free_gb
-            return (
-                f"No cleanup needed. Current free: {free_gb:.2f} GB"
-                if needed_gb <= 0 else
-                f"Cleanup required: Free at least {needed_gb:.2f} GB to meet target {cleanup_target_gb} GB"
-            )
+            needed = cleanup_target_gb - free_gb
+            return f"No cleanup needed. Current free: {free_gb:.2f} GB" if needed <= 0 else f"Cleanup required: Free at least {needed:.2f} GB to meet target {cleanup_target_gb} GB"
         except Exception as e:
             return f"Estimation failed: {e}"
 
     def export_status(self, output_path):
         try:
             usage = shutil.disk_usage(self.path)
+            gb = lambda b: b / 1_073_741_824
             report = {
                 "checked_at": datetime.utcnow().isoformat(timespec="seconds"),
                 "path": self.path,
-                "total_gb": round(usage.total / 1_073_741_824, 2),
-                "used_gb": round(usage.used / 1_073_741_824, 2),
-                "free_gb": round(usage.free / 1_073_741_824, 2),
+                "total_gb": round(gb(usage.total), 2),
+                "used_gb": round(gb(usage.used), 2),
+                "free_gb": round(gb(usage.free), 2),
                 "percent_used": round((usage.used / usage.total) * 100, 2)
             }
             with open(output_path, "w", encoding="utf-8") as f:
