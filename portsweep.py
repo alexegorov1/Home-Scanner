@@ -14,9 +14,10 @@ def sweep_host_ports(
     List[Tuple[int, str]],
     List[Dict[str, Union[str, int, float]]]
 ]:
-    return list(filter(None, (
-        _scan_port(ip, port, timeout, grab_banner, detailed) for port in ports
-    )))
+    return [
+        result for port in ports
+        if (result := _scan_port(ip, port, timeout, grab_banner, detailed)) is not None
+    ]
 
 
 def _scan_port(
@@ -42,7 +43,7 @@ def _scan_port(
                 "ip": ip,
                 "port": port,
                 "status": "open",
-                "banner": banner if grab_banner else "",
+                "banner": banner,
                 "response_time_ms": elapsed
             }
         return (port, banner) if grab_banner else port
