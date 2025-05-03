@@ -20,7 +20,7 @@ class DiskMonitor:
     def _setup_logger(self, log_file):
         logger = logging.getLogger(f"DiskMonitor:{self.path}")
         logger.setLevel(logging.INFO)
-        if not logger.hasHandlers():
+        if not logger.handlers:
             handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
@@ -29,15 +29,15 @@ class DiskMonitor:
 
     def check_disk_usage(self):
         if not os.path.exists(self.path):
-            message = f"Path does not exist: {self.path}"
+            msg = f"Path does not exist: {self.path}"
             if self.alert_on_mount_failure:
-                self.logger.error(message)
-            return [message]
+                self.logger.error(msg)
+            return [msg]
         try:
             usage = shutil.disk_usage(self.path)
-            total_gb = usage.total / 1073741824
-            used_gb = usage.used / 1073741824
-            free_gb = usage.free / 1073741824
+            total_gb = usage.total / 1_073_741_824
+            used_gb = usage.used / 1_073_741_824
+            free_gb = usage.free / 1_073_741_824
             percent_used = (usage.used / usage.total) * 100
             alerts = []
             if percent_used >= self.threshold_percent:
@@ -71,8 +71,7 @@ class DiskMonitor:
         }
         try:
             filename = f"{int(time.time())}_disk_snapshot.json"
-            path = os.path.join(self.snapshot_dir, filename)
-            with open(path, "w", encoding="utf-8") as f:
+            with open(os.path.join(self.snapshot_dir, filename), "w", encoding="utf-8") as f:
                 json.dump(snapshot, f, indent=2)
         except Exception as e:
             self.logger.warning(f"Failed to save snapshot: {e}")
@@ -80,11 +79,11 @@ class DiskMonitor:
     def estimate_cleanup_needed(self, cleanup_target_gb):
         try:
             usage = shutil.disk_usage(self.path)
-            current_free_gb = usage.free / 1073741824
-            required_gb = cleanup_target_gb - current_free_gb
-            if required_gb <= 0:
-                return f"No cleanup needed. Current free: {current_free_gb:.2f} GB"
-            return f"Cleanup required: Free at least {required_gb:.2f} GB to meet target {cleanup_target_gb} GB"
+            free_gb = usage.free / 1_073_741_824
+            needed_gb = cleanup_target_gb - free_gb
+            if needed_gb <= 0:
+                return f"No cleanup needed. Current free: {free_gb:.2f} GB"
+            return f"Cleanup required: Free at least {needed_gb:.2f} GB to meet target {cleanup_target_gb} GB"
         except Exception as e:
             return f"Estimation failed: {e}"
 
@@ -94,9 +93,9 @@ class DiskMonitor:
             report = {
                 "checked_at": datetime.utcnow().isoformat(timespec="seconds"),
                 "path": self.path,
-                "total_gb": round(usage.total / 1073741824, 2),
-                "used_gb": round(usage.used / 1073741824, 2),
-                "free_gb": round(usage.free / 1073741824, 2),
+                "total_gb": round(usage.total / 1_073_741_824, 2),
+                "used_gb": round(usage.used / 1_073_741_824, 2),
+                "free_gb": round(usage.free / 1_073_741_824, 2),
                 "percent_used": round((usage.used / usage.total) * 100, 2)
             }
             with open(output_path, "w", encoding="utf-8") as f:
