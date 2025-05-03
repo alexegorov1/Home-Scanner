@@ -20,7 +20,7 @@ class DiskMonitor:
     def _setup_logger(self, log_file):
         logger = logging.getLogger(f"DiskMonitor:{self.path}")
         logger.setLevel(logging.INFO)
-        if not logger.handlers:
+        if not logger.hasHandlers():
             handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
             formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
@@ -33,39 +33,32 @@ class DiskMonitor:
             if self.alert_on_mount_failure:
                 self.logger.error(message)
             return [message]
-
         try:
             usage = shutil.disk_usage(self.path)
-            total_gb = usage.total / (1024 ** 3)
-            used_gb = usage.used / (1024 ** 3)
-            free_gb = usage.free / (1024 ** 3)
+            total_gb = usage.total / 1073741824
+            used_gb = usage.used / 1073741824
+            free_gb = usage.free / 1073741824
             percent_used = (usage.used / usage.total) * 100
-
             alerts = []
-
             if percent_used >= self.threshold_percent:
-                warning = f"Disk usage alert: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
-                self.logger.warning(warning)
-                alerts.append(warning)
-
+                msg = f"Disk usage alert: {percent_used:.2f}% used on {self.path} (limit {self.threshold_percent}%)"
+                self.logger.warning(msg)
+                alerts.append(msg)
             if free_gb < self.min_free_gb:
-                warning = f"Low disk space alert: {free_gb:.2f} GB free on {self.path} (minimum: {self.min_free_gb} GB)"
-                self.logger.warning(warning)
-                alerts.append(warning)
-
-            self.logger.info(f"Disk check OK: {used_gb:.2f} GB used / {total_gb:.2f} GB total / {free_gb:.2f} GB free on {self.path}")
-
+                msg = f"Low disk space alert: {free_gb:.2f} GB free on {self.path} (minimum: {self.min_free_gb} GB)"
+                self.logger.warning(msg)
+                alerts.append(msg)
+            self.logger.info(f"Disk OK: {used_gb:.2f} GB used / {total_gb:.2f} GB total / {free_gb:.2f} GB free on {self.path}")
             self._save_snapshot(percent_used, total_gb, used_gb, free_gb)
             return alerts
-
         except PermissionError as e:
-            message = f"Permission denied accessing {self.path}: {e}"
-            self.logger.error(message)
-            return [message]
+            msg = f"Permission denied accessing {self.path}: {e}"
+            self.logger.error(msg)
+            return [msg]
         except Exception as e:
-            message = f"Unexpected error while checking disk: {str(e)}"
-            self.logger.exception(message)
-            return [message]
+            msg = f"Unexpected error while checking disk: {e}"
+            self.logger.exception(msg)
+            return [msg]
 
     def _save_snapshot(self, percent_used, total_gb, used_gb, free_gb):
         snapshot = {
@@ -87,7 +80,7 @@ class DiskMonitor:
     def estimate_cleanup_needed(self, cleanup_target_gb):
         try:
             usage = shutil.disk_usage(self.path)
-            current_free_gb = usage.free / (1024 ** 3)
+            current_free_gb = usage.free / 1073741824
             required_gb = cleanup_target_gb - current_free_gb
             if required_gb <= 0:
                 return f"No cleanup needed. Current free: {current_free_gb:.2f} GB"
@@ -101,9 +94,9 @@ class DiskMonitor:
             report = {
                 "checked_at": datetime.utcnow().isoformat(timespec="seconds"),
                 "path": self.path,
-                "total_gb": round(usage.total / (1024 ** 3), 2),
-                "used_gb": round(usage.used / (1024 ** 3), 2),
-                "free_gb": round(usage.free / (1024 ** 3), 2),
+                "total_gb": round(usage.total / 1073741824, 2),
+                "used_gb": round(usage.used / 1073741824, 2),
+                "free_gb": round(usage.free / 1073741824, 2),
                 "percent_used": round((usage.used / usage.total) * 100, 2)
             }
             with open(output_path, "w", encoding="utf-8") as f:
