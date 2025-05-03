@@ -32,8 +32,8 @@ def _scan_port(
         with socket.create_connection((ip, port), timeout=timeout) as sock:
             banner = ""
             if grab_banner:
+                sock.settimeout(0.3)
                 try:
-                    sock.settimeout(0.3)
                     banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
                 except:
                     banner = "N/A"
