@@ -158,4 +158,3 @@ class HomescannerCLI:
 
     def version_info(self):
         print(Fore.CYAN + f"Homescanner version {self.version}")
-
