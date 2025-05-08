@@ -15,19 +15,19 @@ class LogAnalyzer:
         except Exception as e:
             return [f"Error reading logs: {e}"]
         return [
-            f"[{rule.get('title', 'Unnamed Rule')}] {entry.strip()}"
-            for entry in logs
+            f"[{rule.get('title', 'Unnamed Rule')}] {line.strip()}"
+            for line in logs
             for rule in self.rules
-            if self._match_rule(rule, entry.strip().lower())
+            if self._match(rule.get("detection", {}).get("selection", {}), line.lower())
         ]
 
-    def _match_rule(self, rule, log_entry):
+    def _match(self, selection, text):
         try:
-            selection = rule.get("detection", {}).get("selection", {})
             return any(
-                isinstance(value, str) and re.search(re.escape(value), log_entry, re.IGNORECASE)
-                or isinstance(value, list) and any(re.search(re.escape(v), log_entry, re.IGNORECASE) for v in value)
-                for value in selection.values()
+                re.search(re.escape(val), text, re.IGNORECASE)
+                for val in selection.values()
+                if isinstance(val, str) or isinstance(val, list)
+                for val in (val if isinstance(val, list) else [val])
             )
         except:
             return False
