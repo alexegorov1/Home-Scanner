@@ -48,7 +48,7 @@ class AlertManager:
         msg["To"] = self.email_to
         msg["Subject"] = subject
         msg.attach(MIMEText(
-            f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n{body}\n", "plain"
+            f"Timestamp: {datetime.utcnow().isoformat(sep=' ', timespec='seconds')} UTC\n\n{body}", "plain"
         ))
 
         try:
@@ -59,4 +59,4 @@ class AlertManager:
                 smtp.send_message(msg)
                 self.logger.info(f"Alert email sent to {self.email_to}")
         except (smtplib.SMTPException, gaierror, timeout, Exception) as e:
-            self.logger.error(f"Email alert failed: {e}")
+            self.logger.error(f"Failed to send alert email: {e}")
