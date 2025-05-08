@@ -9,17 +9,17 @@ from datetime import datetime
 class AlertManager:
     def __init__(self):
         cfg = load_config()
-        smtp_cfg = cfg.get("alerts", {}).get("smtp", {})
+        smtp = cfg.get("alerts", {}).get("smtp", {})
 
-        self.email_to = smtp_cfg.get("to", "")
-        self.smtp_server = smtp_cfg.get("server", "")
-        self.smtp_port = smtp_cfg.get("port", 587)
-        self.smtp_user = smtp_cfg.get("user", "")
-        self.smtp_password = smtp_cfg.get("password", "")
-        self.email_from = self.smtp_user or "noreply@example.com"
-        self.use_tls = smtp_cfg.get("use_tls", True)
+        self.email_to = smtp.get("to", "")
+        self.email_from = smtp.get("user", "") or "noreply@example.com"
+        self.smtp_server = smtp.get("server", "")
+        self.smtp_port = smtp.get("port", 587)
+        self.smtp_user = smtp.get("user", "")
+        self.smtp_password = smtp.get("password", "")
+        self.use_tls = smtp.get("use_tls", True)
 
-        self.enabled = all((self.smtp_server, self.smtp_port, self.smtp_user, self.smtp_password, self.email_to))
+        self.enabled = all([self.smtp_server, self.smtp_port, self.smtp_user, self.smtp_password, self.email_to])
 
         self.logger = logging.getLogger("AlertManager")
         if not self.logger.hasHandlers():
@@ -30,33 +30,33 @@ class AlertManager:
 
     def send_alert(self, message, severity="warning", source="homescanner"):
         if not message:
-            self.logger.error("Empty alert message, skipping.")
+            self.logger.error("Skipped sending alert: message was empty.")
             return
 
         entry = f"[{severity.upper()}] {source} - {message}"
         self.logger.warning(entry)
 
         if not self.enabled:
-            self.logger.warning("Alert not sent: SMTP configuration incomplete.")
+            self.logger.warning("Skipped sending alert: SMTP config incomplete or disabled.")
             return
 
-        self._send_email_alert(f"[{severity.upper()}] {source}", message)
+        self._send_email(f"[{severity.upper()}] {source}", message)
 
-    def _send_email_alert(self, subject, body):
+    def _send_email(self, subject, body):
         msg = MIMEMultipart()
         msg["From"] = self.email_from
         msg["To"] = self.email_to
         msg["Subject"] = subject
         msg.attach(MIMEText(
-            f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n{body}\n\nPlease investigate.", "plain"
+            f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n{body}\n", "plain"
         ))
 
         try:
-            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as smtp:
                 if self.use_tls:
-                    server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
+                    smtp.starttls()
+                smtp.login(self.smtp_user, self.smtp_password)
+                smtp.send_message(msg)
                 self.logger.info(f"Alert email sent to {self.email_to}")
-        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException, gaierror, timeout, Exception) as e:
-            self.logger.error(f"Failed to send alert email: {e}")
+        except (smtplib.SMTPException, gaierror, timeout, Exception) as e:
+            self.logger.error(f"Email alert failed: {e}")
