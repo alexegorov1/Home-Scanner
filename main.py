@@ -13,78 +13,148 @@ from monitoring.user_activity_monitor import UserActivityMonitor
 from api.server import run_api_server
 from cli.cli import HomescannerCLI
 
+
 def build_components():
     logger = Logger()
+    scanner = NetworkScanner(target="127.0.0.1")
+    analyzer = LogAnalyzer()
+    alert_manager = AlertManager()
+    db = IncidentDatabase()
+    process_monitor = ProcessMonitor()
+    file_monitor = FileMonitor()
+    disk_monitor = DiskMonitor()
+    uptime_monitor = UptimeMonitor()
+    user_activity_monitor = UserActivityMonitor()
+
     return {
         "logger": logger,
-        "scanner": NetworkScanner(target="127.0.0.1"),
-        "analyzer": LogAnalyzer(),
-        "alert_manager": AlertManager(),
-        "db": IncidentDatabase(),
-        "process_monitor": ProcessMonitor(),
-        "file_monitor": FileMonitor(),
-        "disk_monitor": DiskMonitor(),
-        "uptime_monitor": UptimeMonitor(),
-        "user_activity_monitor": UserActivityMonitor()
+        "scanner": scanner,
+        "analyzer": analyzer,
+        "alert_manager": alert_manager,
+        "db": db,
+        "process_monitor": process_monitor,
+        "file_monitor": file_monitor,
+        "disk_monitor": disk_monitor,
+        "uptime_monitor": uptime_monitor,
+        "user_activity_monitor": user_activity_monitor
     }
+
 
 def main_loop(components):
     logger = components["logger"]
+    scanner = components["scanner"]
+    analyzer = components["analyzer"]
+    alert_manager = components["alert_manager"]
+    db = components["db"]
+    process_monitor = components["process_monitor"]
+    file_monitor = components["file_monitor"]
+    disk_monitor = components["disk_monitor"]
+    uptime_monitor = components["uptime_monitor"]
+    user_activity_monitor = components["user_activity_monitor"]
+
     logger.log("Homescanner initialized and running.", level="info")
 
     while True:
-        start = time.time()
+        start_time = time.time()
         logger.log("Starting scan cycle...", level="info")
 
         try:
-            checks = [
-                (components["scanner"].scan, "network", "scanner", lambda x: f"Threat detected: {x}"),
-                (components["analyzer"].analyze_logs, "log", "log_analyzer", lambda x: f"Log anomaly detected: {x}"),
-                (components["process_monitor"].check_processes, "process", "process_monitor", lambda x: f"Suspicious process detected: {x}"),
-                (components["file_monitor"].check_files, "filesystem", "file_monitor", lambda x: f"Modified file detected: {x}"),
-                (components["disk_monitor"].check_disk_usage, "disk", "disk_monitor", lambda x: f"Disk warning: {x}"),
-                (components["user_activity_monitor"].check_new_logins, "account", "user_monitor", lambda x: f"New user login detected: {x}")
-            ]
+            threats = scanner.scan()
+            for threat in threats:
+                message = f"Threat detected: {threat}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="network", severity="warning", source="scanner")
 
-            for monitor_func, incident_type, source, format_msg in checks:
-                for item in monitor_func():
-                    message = format_msg(item)
-                    logger.log(message, level="warning")
-                    components["alert_manager"].send_alert(message)
-                    components["db"].add_incident(message, type=incident_type, severity="warning", source=source)
+            anomalies = analyzer.analyze_logs()
+            for anomaly in anomalies:
+                message = f"Log anomaly detected: {anomaly}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="log", severity="warning", source="log_analyzer")
 
-            logger.log(components["uptime_monitor"].get_uptime(), level="info")
-            logger.log("Scan cycle complete. Sleeping...", level="info")
-            time.sleep(max(0, 60 - (time.time() - start)))
+            suspicious_processes = process_monitor.check_processes()
+            for proc in suspicious_processes:
+                message = f"Suspicious process detected: {proc}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="process", severity="warning", source="process_monitor")
+
+            modified_files = file_monitor.check_files()
+            for file in modified_files:
+                message = f"Modified file detected: {file}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="filesystem", severity="warning", source="file_monitor")
+
+            disk_warnings = disk_monitor.check_disk_usage()
+            for warning in disk_warnings:
+                message = f"Disk warning: {warning}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="disk", severity="warning", source="disk_monitor")
+
+            new_logins = user_activity_monitor.check_new_logins()
+            for login in new_logins:
+                message = f"New user login detected: {login}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="account", severity="warning", source="user_monitor")
+
+            uptime_status = uptime_monitor.get_uptime()
+            logger.log(uptime_status, level="info")
+
+            logger.log("Scan cycle complete. Sleeping until next cycle...", level="info")
+            elapsed = time.time() - start_time
+            time.sleep(max(0, 60 - elapsed))
 
         except Exception as e:
             logger.log(f"Error during scan cycle: {e}", level="error")
 
+
 def health_check(components):
     logger = components["logger"]
-    logger.log("Performing health check...", level="info")
+    db = components["db"]
+    alert_manager = components["alert_manager"]
+    scanner = components["scanner"]
+    file_monitor = components["file_monitor"]
+    disk_monitor = components["disk_monitor"]
 
-    checks = {
-        "Database": lambda: components["db"].get_connection(),
-        "Scanner": lambda: components["scanner"].scan(),
-        "File Monitor": lambda: components["file_monitor"].check_files(),
-        "Disk Monitor": lambda: components["disk_monitor"].check_disk_usage()
-    }
+    logger.log("Performing system health check...", level="info")
 
-    for name, check in checks.items():
-        try:
-            result = check()
-            status = "passed" if result else "returned empty"
-            logger.log(f"{name} check {status}.", level="info")
-        except Exception as e:
-            logger.log(f"{name} check error: {e}", level="error")
+    try:
+        if db.get_connection() is None:
+            logger.log("Health Check Failed: Cannot connect to incident database.", level="error")
+        else:
+            logger.log("Database connection check passed.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Database failure - {e}", level="error")
 
-    if components["alert_manager"].enabled:
-        logger.log("AlertManager configuration OK.", level="info")
+    try:
+        test_threats = scanner.scan()
+        logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
+
+    try:
+        file_monitor.check_files()
+        logger.log("File monitor test ran successfully.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: File monitor failure - {e}", level="error")
+
+    try:
+        disk_monitor.check_disk_usage()
+        logger.log("Disk monitor test ran successfully.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Disk monitor failure - {e}", level="error")
+
+    if not alert_manager.enabled:
+        logger.log("Health Check Warning: Email alerts are disabled or misconfigured.", level="warning")
     else:
-        logger.log("AlertManager disabled or misconfigured.", level="warning")
+        logger.log("AlertManager configuration check passed.", level="info")
 
-    logger.log("Health check complete.", level="info")
+    logger.log("Health check completed.", level="info")
+
 
 def run_all():
     components = build_components()
@@ -99,6 +169,15 @@ def run_all():
         components["scanner"],
         components["alert_manager"]
     )
-    threading.Thread(target=run_api_server, daemon=True).start()
-    threading.Thread(target=cli.start, daemon=True).start()
+
+    api_thread = threading.Thread(target=run_api_server, daemon=True)
+    cli_thread = threading.Thread(target=cli.start, daemon=True)
+
+    api_thread.start()
+    cli_thread.start()
+
     main_loop(components)
+
+
+if __name__ == "__main__":
+    run_all()
