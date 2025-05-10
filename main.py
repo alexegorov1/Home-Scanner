@@ -30,107 +30,58 @@ def build_components():
 
 def main_loop(components):
     logger = components["logger"]
-    scanner = components["scanner"]
-    analyzer = components["analyzer"]
-    alert_manager = components["alert_manager"]
-    db = components["db"]
-    process_monitor = components["process_monitor"]
-    file_monitor = components["file_monitor"]
-    disk_monitor = components["disk_monitor"]
-    uptime_monitor = components["uptime_monitor"]
-    user_activity_monitor = components["user_activity_monitor"]
-
     logger.log("Homescanner initialized and running.", level="info")
 
-    try:
-        while True:
-            start = time.time()
-            logger.log("Starting scan cycle...", level="info")
+    while True:
+        start = time.time()
+        logger.log("Starting scan cycle...", level="info")
 
-            try:
-                for threat in scanner.scan():
-                    logger.log(f"Threat detected: {threat}", level="warning")
-                    alert_manager.send_alert(threat)
-                    db.add_incident(threat, type="network", severity="warning", source="scanner")
+        try:
+            scans = [
+                (components["scanner"].scan, "network", "scanner", lambda x: f"Threat detected: {x}"),
+                (components["analyzer"].analyze_logs, "log", "log_analyzer", lambda x: f"Log anomaly detected: {x}"),
+                (components["process_monitor"].check_processes, "process", "process_monitor", lambda x: f"Suspicious process detected: {x}"),
+                (components["file_monitor"].check_files, "filesystem", "file_monitor", lambda x: f"Modified file detected: {x}"),
+                (components["disk_monitor"].check_disk_usage, "disk", "disk_monitor", lambda x: f"Disk warning: {x}"),
+                (components["user_activity_monitor"].check_new_logins, "account", "user_monitor", lambda x: f"New user login detected: {x}")
+            ]
 
-                for anomaly in analyzer.analyze_logs():
-                    logger.log(f"Log anomaly detected: {anomaly}", level="warning")
-                    alert_manager.send_alert(anomaly)
-                    db.add_incident(anomaly, type="log", severity="warning", source="log_analyzer")
+            for monitor, label, source, formatter in scans:
+                for item in monitor():
+                    message = formatter(item)
+                    logger.log(message, level="warning")
+                    components["alert_manager"].send_alert(message)
+                    components["db"].add_incident(message, type=label, severity="warning", source=source)
 
-                for proc in process_monitor.check_processes():
-                    logger.log(f"Suspicious process detected: {proc}", level="warning")
-                    alert_manager.send_alert(proc)
-                    db.add_incident(proc, type="process", severity="warning", source="process_monitor")
+            logger.log(components["uptime_monitor"].get_uptime(), level="info")
+            logger.log("Scan cycle complete. Sleeping...", level="info")
+            time.sleep(max(0, 60 - (time.time() - start)))
 
-                for file in file_monitor.check_files():
-                    logger.log(f"Modified file detected: {file}", level="warning")
-                    alert_manager.send_alert(file)
-                    db.add_incident(file, type="filesystem", severity="warning", source="file_monitor")
-
-                for warning in disk_monitor.check_disk_usage():
-                    logger.log(f"Disk warning: {warning}", level="warning")
-                    alert_manager.send_alert(warning)
-                    db.add_incident(warning, type="disk", severity="warning", source="disk_monitor")
-
-                for login in user_activity_monitor.check_new_logins():
-                    msg = f"New user login detected: {login}"
-                    logger.log(msg, level="warning")
-                    alert_manager.send_alert(msg)
-                    db.add_incident(msg, type="account", severity="warning", source="user_monitor")
-
-                logger.log(uptime_monitor.get_uptime(), level="info")
-                logger.log("Scan cycle complete. Sleeping...", level="info")
-                time.sleep(max(0, 60 - (time.time() - start)))
-
-            except Exception as e:
-                logger.log(f"Error during scan cycle: {e}", level="error")
-
-    except KeyboardInterrupt:
-        logger.log("Shutdown requested via keyboard interrupt.", level="info")
-    except Exception as e:
-        logger.log(f"Critical error in main loop: {e}", level="critical")
-        raise
+        except Exception as e:
+            logger.log(f"Error during scan cycle: {e}", level="error")
 
 def health_check(components):
     logger = components["logger"]
-    db = components["db"]
-    alert_manager = components["alert_manager"]
-    scanner = components["scanner"]
-    file_monitor = components["file_monitor"]
-    disk_monitor = components["disk_monitor"]
-
     logger.log("Performing health check...", level="info")
 
-    try:
-        if db.get_connection() is None:
-            logger.log("Database connection failed.", level="error")
-        else:
-            logger.log("Database connection OK.", level="info")
-    except Exception as e:
-        logger.log(f"DB check error: {e}", level="error")
+    tests = {
+        "Database": lambda: components["db"].get_connection(),
+        "Scanner": lambda: components["scanner"].scan(),
+        "File Monitor": lambda: components["file_monitor"].check_files(),
+        "Disk Monitor": lambda: components["disk_monitor"].check_disk_usage()
+    }
 
-    try:
-        logger.log(f"Network scan returned {len(scanner.scan())} result(s).", level="info")
-    except Exception as e:
-        logger.log(f"Scanner error: {e}", level="error")
+    for name, test in tests.items():
+        try:
+            result = test()
+            logger.log(f"{name} check passed." if result else f"{name} check returned empty.", level="info")
+        except Exception as e:
+            logger.log(f"{name} check error: {e}", level="error")
 
-    try:
-        file_monitor.check_files()
-        logger.log("File monitor check passed.", level="info")
-    except Exception as e:
-        logger.log(f"File monitor error: {e}", level="error")
-
-    try:
-        disk_monitor.check_disk_usage()
-        logger.log("Disk monitor check passed.", level="info")
-    except Exception as e:
-        logger.log(f"Disk monitor error: {e}", level="error")
-
-    if not alert_manager.enabled:
-        logger.log("Email alerts disabled or misconfigured.", level="warning")
-    else:
+    if components["alert_manager"].enabled:
         logger.log("AlertManager config OK.", level="info")
+    else:
+        logger.log("Email alerts disabled or misconfigured.", level="warning")
 
     logger.log("Health check complete.", level="info")
 
