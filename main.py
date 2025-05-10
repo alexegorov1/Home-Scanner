@@ -37,7 +37,7 @@ def main_loop(components):
         logger.log("Starting scan cycle...", level="info")
 
         try:
-            scans = [
+            checks = [
                 (components["scanner"].scan, "network", "scanner", lambda x: f"Threat detected: {x}"),
                 (components["analyzer"].analyze_logs, "log", "log_analyzer", lambda x: f"Log anomaly detected: {x}"),
                 (components["process_monitor"].check_processes, "process", "process_monitor", lambda x: f"Suspicious process detected: {x}"),
@@ -46,12 +46,12 @@ def main_loop(components):
                 (components["user_activity_monitor"].check_new_logins, "account", "user_monitor", lambda x: f"New user login detected: {x}")
             ]
 
-            for monitor, label, source, formatter in scans:
-                for item in monitor():
-                    message = formatter(item)
+            for monitor_func, incident_type, source, format_msg in checks:
+                for item in monitor_func():
+                    message = format_msg(item)
                     logger.log(message, level="warning")
                     components["alert_manager"].send_alert(message)
-                    components["db"].add_incident(message, type=label, severity="warning", source=source)
+                    components["db"].add_incident(message, type=incident_type, severity="warning", source=source)
 
             logger.log(components["uptime_monitor"].get_uptime(), level="info")
             logger.log("Scan cycle complete. Sleeping...", level="info")
@@ -64,24 +64,25 @@ def health_check(components):
     logger = components["logger"]
     logger.log("Performing health check...", level="info")
 
-    tests = {
+    checks = {
         "Database": lambda: components["db"].get_connection(),
         "Scanner": lambda: components["scanner"].scan(),
         "File Monitor": lambda: components["file_monitor"].check_files(),
         "Disk Monitor": lambda: components["disk_monitor"].check_disk_usage()
     }
 
-    for name, test in tests.items():
+    for name, check in checks.items():
         try:
-            result = test()
-            logger.log(f"{name} check passed." if result else f"{name} check returned empty.", level="info")
+            result = check()
+            status = "passed" if result else "returned empty"
+            logger.log(f"{name} check {status}.", level="info")
         except Exception as e:
             logger.log(f"{name} check error: {e}", level="error")
 
     if components["alert_manager"].enabled:
-        logger.log("AlertManager config OK.", level="info")
+        logger.log("AlertManager configuration OK.", level="info")
     else:
-        logger.log("Email alerts disabled or misconfigured.", level="warning")
+        logger.log("AlertManager disabled or misconfigured.", level="warning")
 
     logger.log("Health check complete.", level="info")
 
