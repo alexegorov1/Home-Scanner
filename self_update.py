@@ -7,7 +7,6 @@ import hashlib
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from core.logger import Logger
 
-
 class SelfUpdater:
     def __init__(self, update_url: str, version_file: str = "VERSION", checksum_file: str = "update.sha256"):
         self.update_url = update_url.rstrip("/")
