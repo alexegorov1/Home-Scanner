@@ -12,7 +12,7 @@ class CorrelationEngine:
             self._pattern_ransomware_like_behavior,
             self._pattern_post_login_file_activity
         ]
-
+        
     def _now(self):
         return datetime.utcnow()
 
