@@ -5,7 +5,6 @@ from core.database import IncidentDatabase
 from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
 
-
 class MetricsExporter:
     def __init__(self, host='0.0.0.0', port=9100):
         self.host = host
