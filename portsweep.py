@@ -19,4 +19,3 @@ def sweep_host_ports(
         if (result := _scan_port(ip, port, timeout, grab_banner, detailed)) is not None
     ]
 
-
