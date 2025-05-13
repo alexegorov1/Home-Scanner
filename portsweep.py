@@ -20,32 +20,3 @@ def sweep_host_ports(
     ]
 
 
-def _scan_port(
-    ip: str,
-    port: int,
-    timeout: float,
-    grab_banner: bool,
-    detailed: bool
-) -> Optional[Union[int, Tuple[int, str], Dict[str, Union[str, int, float]]]]:
-    try:
-        start = time.perf_counter()
-        with socket.create_connection((ip, port), timeout=timeout) as sock:
-            banner = ""
-            if grab_banner:
-                sock.settimeout(0.3)
-                try:
-                    banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
-                except:
-                    banner = "N/A"
-        elapsed = round((time.perf_counter() - start) * 1000, 2)
-        if detailed:
-            return {
-                "ip": ip,
-                "port": port,
-                "status": "open",
-                "banner": banner,
-                "response_time_ms": elapsed
-            }
-        return (port, banner) if grab_banner else port
-    except:
-        return None
