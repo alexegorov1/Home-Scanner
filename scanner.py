@@ -121,18 +121,6 @@ class NetworkScanner:
             self.logger.debug(f"Banner grab failed: {e}")
             return ""
 
-    def _build_result(self, port: int, banner: str) -> Dict:
-        service = self.COMMON_PORTS.get(port, "Unknown")
-        threat = self._analyze_threat(port, banner)
-        return {
-            "port": port,
-            "service": service,
-            "banner": banner.strip() or "N/A",
-            "threat": threat,
-            "status": "open",
-            "timestamp": datetime.utcnow().isoformat(timespec="seconds")
-        }
-
     def _analyze_threat(self, port: int, banner: str) -> str:
         base = self.POTENTIAL_THREATS.get(port, f"Open port {port}, unknown service")
         indicators = []
