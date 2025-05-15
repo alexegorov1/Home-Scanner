@@ -37,19 +37,3 @@ def load_config(force_reload: bool = False) -> Dict:
         _CFG_CACHE = _load_yaml(_CONFIG_FILE)
     return _CFG_CACHE
 
-def load_detection_rules(force_reload: bool = False) -> List[Dict]:
-    global _RULES_CACHE
-    if _RULES_CACHE and not force_reload:
-        return _RULES_CACHE
-
-    rules = []
-    if _RULES_DIR.exists():
-        for yml in _RULES_DIR.glob("*.yml"):
-            data = _load_yaml(yml)
-            if data:
-                rules.append(data)
-    else:
-        log.warning(f"Rules directory missing: {_RULES_DIR}")
-
-    _RULES_CACHE = rules
-    return rules
