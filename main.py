@@ -91,3 +91,63 @@ def main_loop(components):
                 logger.log(message, level="warning")
                 alert_manager.send_alert(message)
                 db.add_incident(message, type="disk", severity="warning", source="disk_monitor")
+
+            new_logins = user_activity_monitor.check_new_logins()
+            for login in new_logins:
+                message = f"New user login detected: {login}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="account", severity="warning", source="user_monitor")
+
+            uptime_status = uptime_monitor.get_uptime()
+            logger.log(uptime_status, level="info")
+
+            logger.log("Scan cycle complete. Sleeping until next cycle...", level="info")
+            elapsed = time.time() - start_time
+            time.sleep(max(0, 60 - elapsed))
+
+        except Exception as e:
+            logger.log(f"Error during scan cycle: {e}", level="error")
+
+def health_check(components):
+    logger = components["logger"]
+    db = components["db"]
+    alert_manager = components["alert_manager"]
+    scanner = components["scanner"]
+    file_monitor = components["file_monitor"]
+    disk_monitor = components["disk_monitor"]
+
+    logger.log("Performing system health check...", level="info")
+
+    try:
+        if db.get_connection() is None:
+            logger.log("Health Check Failed: Cannot connect to incident database.", level="error")
+        else:
+            logger.log("Database connection check passed.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Database failure - {e}", level="error")
+
+    try:
+        test_threats = scanner.scan_sync()
+        logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
+
+    try:
+        file_monitor.check_files()
+        logger.log("File monitor test ran successfully.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: File monitor failure - {e}", level="error")
+
+    try:
+        disk_monitor.check_disk_usage()
+        logger.log("Disk monitor test ran successfully.", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Disk monitor failure - {e}", level="error")
+
+    if not alert_manager.enabled:
+        logger.log("Health Check Warning: Email alerts are disabled or misconfigured.", level="warning")
+    else:
+        logger.log("AlertManager configuration check passed.", level="info")
+
+    logger.log("Health check completed.", level="info")
