@@ -92,19 +92,6 @@ def main_loop(components):
                 alert_manager.send_alert(message)
                 db.add_incident(message, type="disk", severity="warning", source="disk_monitor")
 
-            new_logins = user_activity_monitor.check_new_logins()
-            for login in new_logins:
-                message = f"New user login detected: {login}"
-                logger.log(message, level="warning")
-                alert_manager.send_alert(message)
-                db.add_incident(message, type="account", severity="warning", source="user_monitor")
-
-            uptime_status = uptime_monitor.get_uptime()
-            logger.log(uptime_status, level="info")
-
-            logger.log("Scan cycle complete. Sleeping until next cycle...", level="info")
-            elapsed = time.time() - start_time
-            time.sleep(max(0, 60 - elapsed))
 
         except Exception as e:
             logger.log(f"Error during scan cycle: {e}", level="error")
