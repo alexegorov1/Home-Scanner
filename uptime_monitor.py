@@ -28,16 +28,12 @@ class UptimeMonitor:
         logger.setLevel(logging.INFO)
         if not logger.handlers:
             handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
-            formatter = logging.Formatter(
-                "[%(asctime)s] %(levelname)s - %(message)s",
-                "%Y-%m-%d %H:%M:%S"
-            )
+            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
             logger.addHandler(handler)
         return logger
 
     def get_uptime(self, raw: bool = False) -> Union[int, str]:
-        """Return uptime in seconds or as formatted string."""
         with self._lock:
             elapsed = timedelta(seconds=time.monotonic() - self._boot_time_monotonic)
         return int(elapsed.total_seconds()) if raw else self._format_duration(elapsed)
@@ -53,7 +49,7 @@ class UptimeMonitor:
         if hours or days: parts.append(f"{hours}h")
         if minutes or hours or days: parts.append(f"{minutes}m")
         parts.append(f"{seconds}s")
-        return "System uptime: " + " ".join(parts)
+        return " ".join(parts)
 
     def get_start_time(self, iso: bool = False) -> str:
         return self._wall_start.isoformat(timespec="seconds") + "Z" if iso else self._wall_start.strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -62,13 +58,12 @@ class UptimeMonitor:
         uptime = self.get_uptime()
         start = self.get_start_time()
         prefix = f"[{self._hostname}] " if include_host else ""
-        report = f"{prefix}{uptime} (since {start})"
+        report = f"{prefix}System uptime: {uptime} (since {start})"
         if log:
             self._logger.info(report)
         return report
 
     def export_status(self, output_path: Optional[Union[str, Path]] = None) -> bool:
-        """Export current uptime status to file."""
         status = {
             "hostname": self._hostname,
             "uptime_seconds": self.get_uptime(raw=True),
@@ -87,38 +82,9 @@ class UptimeMonitor:
             return False
 
     def is_uptime_exceeding(self, threshold_seconds: int) -> bool:
-        """Return True if uptime exceeds threshold (in seconds)."""
         try:
             current = self.get_uptime(raw=True)
             return current > threshold_seconds
         except Exception as e:
             self._logger.warning(f"Uptime check failed: {e}")
             return False
-
-    def time_since(self, timestamp_str: str) -> Optional[str]:
-        """Return time since given ISO timestamp string."""
-        try:
-            past = datetime.fromisoformat(timestamp_str.replace("Z", ""))
-            delta = datetime.utcnow() - past
-            return self._format_duration(delta)
-        except Exception as e:
-            self._logger.error(f"Invalid timestamp for delta: {timestamp_str} — {e}")
-            return None
-
-    def to_dict(self) -> dict:
-        """Return structured dict of current uptime status."""
-        return {
-            "hostname": self._hostname,
-            "uptime_seconds": self.get_uptime(raw=True),
-            "uptime_text": self.get_uptime(),
-            "boot_time": self.get_start_time(iso=True),
-            "checked_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"
-        }
-
-    def to_json(self) -> str:
-        """Return current uptime status as JSON string."""
-        try:
-            return json.dumps(self.to_dict(), indent=2)
-        except Exception as e:
-            self._logger.warning(f"Failed to convert uptime to JSON: {e}")
-            return "{}"
