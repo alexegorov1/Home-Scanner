@@ -20,20 +20,4 @@ if not log.handlers:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-def _load_yaml(path: Path) -> Dict:
-    if not path.exists():
-        log.warning(f"Config file missing: {path}")
-        return {}
-    with path.open(encoding="utf-8") as f:
-        try:
-            return yaml.safe_load(f) or {}
-        except Exception as e:
-            log.error(f"YAML parse failed for {path}: {e}")
-            return {}
-
-def load_config(force_reload: bool = False) -> Dict:
-    global _CFG_CACHE
-    if not _CFG_CACHE or force_reload:
-        _CFG_CACHE = _load_yaml(_CONFIG_FILE)
-    return _CFG_CACHE
 
