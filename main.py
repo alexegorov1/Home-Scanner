@@ -91,5 +91,3 @@ def main_loop(components):
                 logger.log(message, level="warning")
                 alert_manager.send_alert(message)
                 db.add_incident(message, type="disk", severity="warning", source="disk_monitor")
-
-
