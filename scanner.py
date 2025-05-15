@@ -177,19 +177,3 @@ class NetworkScanner:
             self.logger.error(f"Failed to export text: {e}")
             return False
 
-    def summarize(self) -> Dict[str, int]:
-        summary = {}
-        for r in self.results:
-            if r.get("status") == "open":
-                threat = r.get("threat", "Uncategorized")
-                summary[threat] = summary.get(threat, 0) + 1
-        return summary
-
-    def print_summary(self):
-        summary = self.summarize()
-        if not summary:
-            self.logger.info("No threats detected.")
-            return
-        self.logger.info("Threat summary:")
-        for threat, count in summary.items():
-            self.logger.info(f"  {threat}: {count}")
