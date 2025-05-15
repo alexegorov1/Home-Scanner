@@ -151,3 +151,27 @@ def health_check(components):
         logger.log("AlertManager configuration check passed.", level="info")
 
     logger.log("Health check completed.", level="info")
+
+def run_all():
+    components = build_components()
+    cli = HomescannerCLI(
+        components["uptime_monitor"],
+        components["disk_monitor"],
+        components["logger"],
+        components["analyzer"],
+        components["db"],
+        components["file_monitor"],
+        components["process_monitor"],
+        components["scanner"],
+        components["alert_manager"]
+    )
+
+    api_thread = threading.Thread(target=run_api_server, daemon=True)
+    cli_thread = threading.Thread(target=cli.start, daemon=True)
+
+    api_thread.start()
+    cli_thread.start()
+
+    main_loop(components)
+
+if __name__ == "__main__":
