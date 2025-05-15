@@ -54,6 +54,15 @@ class UptimeMonitor:
     def get_start_time(self, iso: bool = False) -> str:
         return self._wall_start.isoformat(timespec="seconds") + "Z" if iso else self._wall_start.strftime("%Y-%m-%d %H:%M:%S UTC")
 
+    def report(self, include_host: bool = True, log: bool = True) -> str:
+        uptime = self.get_uptime()
+        start = self.get_start_time()
+        prefix = f"[{self._hostname}] " if include_host else ""
+        report = f"{prefix}System uptime: {uptime} (since {start})"
+        if log:
+            self._logger.info(report)
+        return report
+
     def export_status(self, output_path: Optional[Union[str, Path]] = None) -> bool:
         status = {
             "hostname": self._hostname,
@@ -71,3 +80,36 @@ class UptimeMonitor:
         except Exception as e:
             self._logger.error(f"Failed to export uptime status: {e}")
             return False
+
+    def is_uptime_exceeding(self, threshold_seconds: int) -> bool:
+        try:
+            current = self.get_uptime(raw=True)
+            return current > threshold_seconds
+        except Exception as e:
+            self._logger.warning(f"Uptime check failed: {e}")
+            return False
+
+    def time_since(self, timestamp_str: str) -> Optional[str]:
+        try:
+            past = datetime.fromisoformat(timestamp_str.replace("Z", ""))
+            delta = datetime.utcnow() - past
+            return self._format_duration(delta)
+        except Exception as e:
+            self._logger.error(f"Invalid timestamp for delta: {timestamp_str} — {e}")
+            return None
+
+    def to_dict(self) -> dict:
+        return {
+            "hostname": self._hostname,
+            "uptime_seconds": self.get_uptime(raw=True),
+            "uptime_text": self.get_uptime(),
+            "boot_time": self.get_start_time(iso=True),
+            "checked_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        }
+
+    def to_json(self) -> str:
+        try:
+            return json.dumps(self.to_dict(), indent=2)
+        except Exception as e:
+            self._logger.warning(f"Failed to convert uptime to JSON: {e}")
+            return "{}"
