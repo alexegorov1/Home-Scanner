@@ -108,14 +108,3 @@ def main_loop(components):
 
         except Exception as e:
             logger.log(f"Error during scan cycle: {e}", level="error")
-
-def health_check(components):
-    logger = components["logger"]
-    db = components["db"]
-    alert_manager = components["alert_manager"]
-    scanner = components["scanner"]
-    file_monitor = components["file_monitor"]
-    disk_monitor = components["disk_monitor"]
-
-    logger.log("Performing system health check...", level="info")
-
