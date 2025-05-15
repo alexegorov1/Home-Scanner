@@ -93,5 +93,3 @@ def main_loop(components):
                 db.add_incident(message, type="disk", severity="warning", source="disk_monitor")
 
 
-        except Exception as e:
-            logger.log(f"Error during scan cycle: {e}", level="error")
