@@ -88,3 +88,28 @@ class UptimeMonitor:
         except Exception as e:
             self._logger.warning(f"Uptime check failed: {e}")
             return False
+
+    def time_since(self, timestamp_str: str) -> Optional[str]:
+        try:
+            past = datetime.fromisoformat(timestamp_str.replace("Z", ""))
+            delta = datetime.utcnow() - past
+            return self._format_duration(delta)
+        except Exception as e:
+            self._logger.error(f"Invalid timestamp for delta: {timestamp_str} — {e}")
+            return None
+
+    def to_dict(self) -> dict:
+        return {
+            "hostname": self._hostname,
+            "uptime_seconds": self.get_uptime(raw=True),
+            "uptime_text": self.get_uptime(),
+            "boot_time": self.get_start_time(iso=True),
+            "checked_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        }
+
+    def to_json(self) -> str:
+        try:
+            return json.dumps(self.to_dict(), indent=2)
+        except Exception as e:
+            self._logger.warning(f"Failed to convert uptime to JSON: {e}")
+            return "{}"
