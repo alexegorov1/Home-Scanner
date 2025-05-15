@@ -54,15 +54,6 @@ class UptimeMonitor:
     def get_start_time(self, iso: bool = False) -> str:
         return self._wall_start.isoformat(timespec="seconds") + "Z" if iso else self._wall_start.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    def report(self, include_host: bool = True, log: bool = True) -> str:
-        uptime = self.get_uptime()
-        start = self.get_start_time()
-        prefix = f"[{self._hostname}] " if include_host else ""
-        report = f"{prefix}System uptime: {uptime} (since {start})"
-        if log:
-            self._logger.info(report)
-        return report
-
     def export_status(self, output_path: Optional[Union[str, Path]] = None) -> bool:
         status = {
             "hostname": self._hostname,
