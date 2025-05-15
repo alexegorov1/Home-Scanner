@@ -147,21 +147,3 @@ class NetworkScanner:
             self.logger.error(f"Failed to export JSON: {e}")
             return False
 
-    def export_results_text(self, path: Union[str, Path]) -> bool:
-        try:
-            path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("w", encoding="utf-8") as f:
-                for r in sorted(self.results, key=lambda x: x["port"]):
-                    status = r.get("status", "open")
-                    line = (
-                        f"{r['timestamp']} | Port {r['port']}/{r['service']} ({status}) | "
-                        f"Threat: {r.get('threat', 'N/A')} | Banner: {r.get('banner', '-')}\n"
-                    )
-                    f.write(line)
-            self.logger.info(f"Exported results as text to {path}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to export text: {e}")
-            return False
-
