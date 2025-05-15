@@ -84,6 +84,15 @@ class NetworkScanner:
         self.logger.info(f"Scan completed in {elapsed:.2f}s — {len(self.results)} open port(s) found.")
         return self.results
 
+    def scan_sync(self) -> List[Dict]:
+        try:
+            return asyncio.run(self.scan())
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return loop.run_until_complete(self.scan())  # fallback for threaded CLI
+            return loop.run_until_complete(self.scan())
+
     async def _scan_ports(self):
         await asyncio.gather(*(self._scan_port(port) for port in self.ports))
 
@@ -121,6 +130,18 @@ class NetworkScanner:
             self.logger.debug(f"Banner grab failed: {e}")
             return ""
 
+    def _build_result(self, port: int, banner: str) -> Dict:
+        service = self.COMMON_PORTS.get(port, "Unknown")
+        threat = self._analyze_threat(port, banner)
+        return {
+            "port": port,
+            "service": service,
+            "banner": banner.strip() or "N/A",
+            "threat": threat,
+            "status": "open",
+            "timestamp": datetime.utcnow().isoformat(timespec="seconds")
+        }
+
     def _analyze_threat(self, port: int, banner: str) -> str:
         base = self.POTENTIAL_THREATS.get(port, f"Open port {port}, unknown service")
         indicators = []
@@ -146,3 +167,38 @@ class NetworkScanner:
         except Exception as e:
             self.logger.error(f"Failed to export JSON: {e}")
             return False
+
+    def export_results_text(self, path: Union[str, Path]) -> bool:
+        try:
+            path = Path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("w", encoding="utf-8") as f:
+                for r in sorted(self.results, key=lambda x: x["port"]):
+                    status = r.get("status", "open")
+                    line = (
+                        f"{r['timestamp']} | Port {r['port']}/{r['service']} ({status}) | "
+                        f"Threat: {r.get('threat', 'N/A')} | Banner: {r.get('banner', '-')}\n"
+                    )
+                    f.write(line)
+            self.logger.info(f"Exported results as text to {path}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to export text: {e}")
+            return False
+
+    def summarize(self) -> Dict[str, int]:
+        summary = {}
+        for r in self.results:
+            if r.get("status") == "open":
+                threat = r.get("threat", "Uncategorized")
+                summary[threat] = summary.get(threat, 0) + 1
+        return summary
+
+    def print_summary(self):
+        summary = self.summarize()
+        if not summary:
+            self.logger.info("No threats detected.")
+            return
+        self.logger.info("Threat summary:")
+        for threat, count in summary.items():
+            self.logger.info(f"  {threat}: {count}")
