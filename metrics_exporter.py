@@ -1,115 +1,114 @@
 import time
-import logging
-import platform
-import json
-from datetime import timedelta, datetime
-from threading import Lock
-from pathlib import Path
-from typing import Optional, Union
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from core.database import IncidentDatabase
+from monitoring.disk_monitor import DiskMonitor
+from system.uptime_monitor import UptimeMonitor
 
 
-class UptimeMonitor:
-    def __init__(
-        self,
-        log_file: Optional[Union[str, Path]] = None,
-        snapshot_dir: Union[str, Path] = "snapshots/uptime",
-        hostname_override: Optional[str] = None,
-    ):
-        self._boot_time_monotonic = time.monotonic()
-        self._wall_start = datetime.utcnow()
-        self._hostname = hostname_override or platform.node()
-        self._snapshot_dir = Path(snapshot_dir)
-        self._snapshot_dir.mkdir(parents=True, exist_ok=True)
-        self._logger = self._setup_logger(log_file)
-        self._lock = Lock()
+class MetricsExporter:
+    def __init__(self, host='0.0.0.0', port=9100):
+        self.host = host
+        self.port = port
+        self.db = IncidentDatabase()
+        self.disk_monitor = DiskMonitor()
+        self.uptime_monitor = UptimeMonitor()
+        self.metrics = {}
 
-    def _setup_logger(self, log_file: Optional[Union[str, Path]]) -> logging.Logger:
-        logger = logging.getLogger(f"UptimeMonitor:{self._hostname}")
-        logger.setLevel(logging.INFO)
-        if not logger.handlers:
-            handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
-            formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-        return logger
+    def start(self):
+        server = HTTPServer((self.host, self.port), self._build_handler())
+        threading.Thread(target=server.serve_forever, daemon=True).start()
 
-    def get_uptime(self, raw: bool = False) -> Union[int, str]:
-        with self._lock:
-            elapsed = timedelta(seconds=time.monotonic() - self._boot_time_monotonic)
-        return int(elapsed.total_seconds()) if raw else self._format_duration(elapsed)
+    def _build_handler(self):
+        exporter = self
 
-    def _format_duration(self, delta: timedelta) -> str:
-        total_seconds = int(delta.total_seconds())
-        days, rem = divmod(total_seconds, 86400)
-        hours, rem = divmod(rem, 3600)
-        minutes, seconds = divmod(rem, 60)
+        class MetricsHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path != "/metrics":
+                    self.send_error(404, "Not Found")
+                    return
 
-        parts = []
-        if days: parts.append(f"{days}d")
-        if hours or days: parts.append(f"{hours}h")
-        if minutes or hours or days: parts.append(f"{minutes}m")
-        parts.append(f"{seconds}s")
-        return " ".join(parts)
+                exporter._collect_metrics()
+                output = []
+                for name, data in exporter.metrics.items():
+                    output.append(f"# HELP {name} {data['help']}")
+                    output.append(f"# TYPE {name} {data['type']}")
+                    output.append(f"{name} {data['value']}")
 
-    def get_start_time(self, iso: bool = False) -> str:
-        return self._wall_start.isoformat(timespec="seconds") + "Z" if iso else self._wall_start.strftime("%Y-%m-%d %H:%M:%S UTC")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; version=0.0.4")
+                self.end_headers()
+                self.wfile.write("\n".join(output).encode("utf-8"))
 
-    def report(self, include_host: bool = True, log: bool = True) -> str:
-        uptime = self.get_uptime()
-        start = self.get_start_time()
-        prefix = f"[{self._hostname}] " if include_host else ""
-        report = f"{prefix}System uptime: {uptime} (since {start})"
-        if log:
-            self._logger.info(report)
-        return report
+        return MetricsHandler
 
-    def export_status(self, output_path: Optional[Union[str, Path]] = None) -> bool:
-        status = {
-            "hostname": self._hostname,
-            "uptime_seconds": self.get_uptime(raw=True),
-            "uptime_text": self.get_uptime(),
-            "boot_time": self.get_start_time(iso=True),
-            "exported_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"
-        }
+    def _collect_metrics(self):
+        self._metric_incidents()
+        self._metric_disk()
+        self._metric_uptime()
+
+    def _metric_incidents(self):
         try:
-            path = Path(output_path) if output_path else self._snapshot_dir / f"{int(time.time())}_uptime.json"
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(status, f, indent=2)
-            self._logger.info(f"Uptime status exported to {path}")
-            return True
-        except Exception as e:
-            self._logger.error(f"Failed to export uptime status: {e}")
-            return False
+            conn = self.db.get_connection()
+            if not conn:
+                raise RuntimeError("Database unavailable")
 
-    def is_uptime_exceeding(self, threshold_seconds: int) -> bool:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM incidents")
+            self.metrics["homescanner_incidents_total"] = {
+                "help": "Total number of recorded incidents",
+                "type": "counter",
+                "value": cur.fetchone()[0]
+            }
+
+            cur.execute("SELECT COUNT(*) FROM incidents WHERE severity = 'critical'")
+            self.metrics["homescanner_critical_incidents_total"] = {
+                "help": "Number of critical incidents recorded",
+                "type": "counter",
+                "value": cur.fetchone()[0]
+            }
+
+            conn.close()
+        except Exception:
+            self.metrics["homescanner_incidents_total"] = {
+                "help": "Total number of recorded incidents",
+                "type": "counter",
+                "value": 0
+            }
+            self.metrics["homescanner_critical_incidents_total"] = {
+                "help": "Number of critical incidents recorded",
+                "type": "counter",
+                "value": 0
+            }
+
+    def _metric_disk(self):
         try:
-            current = self.get_uptime(raw=True)
-            return current > threshold_seconds
-        except Exception as e:
-            self._logger.warning(f"Uptime check failed: {e}")
-            return False
+            alerts = len(self.disk_monitor.check_disk_usage())
+            self.metrics["homescanner_disk_alerts_total"] = {
+                "help": "Current number of disk space or usage alerts",
+                "type": "gauge",
+                "value": alerts
+            }
+        except Exception:
+            self.metrics["homescanner_disk_alerts_total"] = {
+                "help": "Current number of disk space or usage alerts",
+                "type": "gauge",
+                "value": 0
+            }
 
-    def time_since(self, timestamp_str: str) -> Optional[str]:
+    def _metric_uptime(self):
         try:
-            past = datetime.fromisoformat(timestamp_str.replace("Z", ""))
-            delta = datetime.utcnow() - past
-            return self._format_duration(delta)
-        except Exception as e:
-            self._logger.error(f"Invalid timestamp for delta: {timestamp_str} — {e}")
-            return None
-
-    def to_dict(self) -> dict:
-        return {
-            "hostname": self._hostname,
-            "uptime_seconds": self.get_uptime(raw=True),
-            "uptime_text": self.get_uptime(),
-            "boot_time": self.get_start_time(iso=True),
-            "checked_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"
-        }
-
-    def to_json(self) -> str:
-        try:
-            return json.dumps(self.to_dict(), indent=2)
-        except Exception as e:
-            self._logger.warning(f"Failed to convert uptime to JSON: {e}")
-            return "{}"
+            uptime_str = self.uptime_monitor.get_uptime()
+            parts = {x[-1]: int(x[:-1]) for x in uptime_str.split()}
+            hours = parts.get("d", 0) * 24 + parts.get("h", 0)
+            self.metrics["homescanner_uptime_hours"] = {
+                "help": "System uptime in hours",
+                "type": "gauge",
+                "value": hours
+            }
+        except Exception:
+            self.metrics["homescanner_uptime_hours"] = {
+                "help": "System uptime in hours",
+                "type": "gauge",
+                "value": 0
+            }
