@@ -13,7 +13,6 @@ from monitoring.user_activity_monitor import UserActivityMonitor
 from api.server import run_api_server
 from cli.cli import HomescannerCLI
 
-
 def build_components():
     logger = Logger()
     scanner = NetworkScanner(target="127.0.0.1")
@@ -39,7 +38,6 @@ def build_components():
         "user_activity_monitor": user_activity_monitor
     }
 
-
 def main_loop(components):
     logger = components["logger"]
     scanner = components["scanner"]
@@ -59,7 +57,7 @@ def main_loop(components):
         logger.log("Starting scan cycle...", level="info")
 
         try:
-            threats = scanner.scan()
+            threats = scanner.scan_sync()
             for threat in threats:
                 message = f"Threat detected: {threat}"
                 logger.log(message, level="warning")
@@ -111,7 +109,6 @@ def main_loop(components):
         except Exception as e:
             logger.log(f"Error during scan cycle: {e}", level="error")
 
-
 def health_check(components):
     logger = components["logger"]
     db = components["db"]
@@ -122,62 +119,3 @@ def health_check(components):
 
     logger.log("Performing system health check...", level="info")
 
-    try:
-        if db.get_connection() is None:
-            logger.log("Health Check Failed: Cannot connect to incident database.", level="error")
-        else:
-            logger.log("Database connection check passed.", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: Database failure - {e}", level="error")
-
-    try:
-        test_threats = scanner.scan()
-        logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
-
-    try:
-        file_monitor.check_files()
-        logger.log("File monitor test ran successfully.", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: File monitor failure - {e}", level="error")
-
-    try:
-        disk_monitor.check_disk_usage()
-        logger.log("Disk monitor test ran successfully.", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: Disk monitor failure - {e}", level="error")
-
-    if not alert_manager.enabled:
-        logger.log("Health Check Warning: Email alerts are disabled or misconfigured.", level="warning")
-    else:
-        logger.log("AlertManager configuration check passed.", level="info")
-
-    logger.log("Health check completed.", level="info")
-
-
-def run_all():
-    components = build_components()
-    cli = HomescannerCLI(
-        components["uptime_monitor"],
-        components["disk_monitor"],
-        components["logger"],
-        components["analyzer"],
-        components["db"],
-        components["file_monitor"],
-        components["process_monitor"],
-        components["scanner"],
-        components["alert_manager"]
-    )
-
-    api_thread = threading.Thread(target=run_api_server, daemon=True)
-    cli_thread = threading.Thread(target=cli.start, daemon=True)
-
-    api_thread.start()
-    cli_thread.start()
-
-    main_loop(components)
-
-
-if __name__ == "__main__":
-    run_all()
