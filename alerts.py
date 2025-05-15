@@ -41,22 +41,3 @@ class AlertManager:
             return
 
         self._send_email(f"[{severity.upper()}] {source}", message)
-
-    def _send_email(self, subject, body):
-        msg = MIMEMultipart()
-        msg["From"] = self.email_from
-        msg["To"] = self.email_to
-        msg["Subject"] = subject
-        msg.attach(MIMEText(
-            f"Timestamp: {datetime.utcnow().isoformat(sep=' ', timespec='seconds')} UTC\n\n{body}", "plain"
-        ))
-
-        try:
-            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as smtp:
-                if self.use_tls:
-                    smtp.starttls()
-                smtp.login(self.smtp_user, self.smtp_password)
-                smtp.send_message(msg)
-                self.logger.info(f"Alert email sent to {self.email_to}")
-        except (smtplib.SMTPException, gaierror, timeout, Exception) as e:
-            self.logger.error(f"Failed to send alert email: {e}")
