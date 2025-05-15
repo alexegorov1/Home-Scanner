@@ -146,4 +146,3 @@ class NetworkScanner:
         except Exception as e:
             self.logger.error(f"Failed to export JSON: {e}")
             return False
-
