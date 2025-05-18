@@ -122,7 +122,3 @@ class ProcessMonitor:
             self.logger.info("Process scan complete: no suspicious activity found.")
 
         return detections
-
-    def list_keywords(self) -> List[str]:
-        """Returns sorted list of current suspicious keywords."""
-        return sorted(self.suspicious_keywords)
