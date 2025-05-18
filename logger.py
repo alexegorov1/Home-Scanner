@@ -83,3 +83,10 @@ class Logger:
                 "component": "logger",
                 "message": f"Log read error: {e}"
             })]
+
+    def _flush_on_exit(self, *_):
+        for handler in self.logger.handlers:
+            try:
+                handler.flush()
+            except Exception:
+                continue
