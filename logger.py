@@ -71,3 +71,15 @@ class Logger:
 
         with self._lock:
             getattr(self.logger, level.lower())(message.replace("\n", "\\n").replace("\r", "\\r"), extra=extra)
+
+    def read_logs(self, lines=100):
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                return f.readlines()[-lines:]
+        except Exception as e:
+            return [json.dumps({
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "level": "ERROR",
+                "component": "logger",
+                "message": f"Log read error: {e}"
+            })]
