@@ -126,15 +126,3 @@ class ProcessMonitor:
     def list_keywords(self) -> List[str]:
         """Returns sorted list of current suspicious keywords."""
         return sorted(self.suspicious_keywords)
-
-    def add_keywords(self, new_terms: List[str]):
-        """Adds one or more keywords to monitor set."""
-        added = 0
-        for term in new_terms:
-            clean = term.strip().lower()
-            if clean and clean not in self.suspicious_keywords:
-                self.suspicious_keywords.add(clean)
-                added += 1
-
-        if added:
-            self.logger.info(f"[ProcessMonitor] Added {added} new keyword(s): {', '.join(new_terms)}")
