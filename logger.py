@@ -33,6 +33,10 @@ class JSONLogFormatter(logging.Formatter):
 
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+class Logger:
+    _lock = threading.Lock()
+    _valid_levels = {"debug", "info", "warning", "error", "critical"}
+    _valid_events = {"log", "scan", "alert", "db", "file", "user", "uptime", "network", "internal"}
 
     def __init__(self, log_file="logs/system.json.log", max_bytes=5 * 1024 * 1024, backup_count=5):
         self.log_file = log_file
