@@ -138,3 +138,15 @@ class ProcessMonitor:
 
         if added:
             self.logger.info(f"[ProcessMonitor] Added {added} new keyword(s): {', '.join(new_terms)}")
+
+    def remove_keywords(self, terms: List[str]):
+        """Removes specified keywords from the set."""
+        removed = 0
+        for term in terms:
+            clean = term.strip().lower()
+            if clean in self.suspicious_keywords:
+                self.suspicious_keywords.remove(clean)
+                removed += 1
+
+        if removed:
+            self.logger.info(f"[ProcessMonitor] Removed {removed} keyword(s): {', '.join(terms)}")
