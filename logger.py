@@ -33,10 +33,6 @@ class JSONLogFormatter(logging.Formatter):
 
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
-class Logger:
-    _lock = threading.Lock()
-    _valid_levels = {"debug", "info", "warning", "error", "critical"}
-    _valid_events = {"log", "scan", "alert", "db", "file", "user", "uptime", "network", "internal"}
 
     def __init__(self, log_file="logs/system.json.log", max_bytes=5 * 1024 * 1024, backup_count=5):
         self.log_file = log_file
@@ -91,6 +87,17 @@ class Logger:
             else:
                 self.logger.log(getattr(logging, level.upper(), logging.INFO), message, extra=extra)
 
+    def read_logs(self, lines=100):
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                return f.readlines()[-lines:]
+        except Exception as e:
+            return [json.dumps({
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "level": "ERROR",
+                "component": "logger",
+                "event_type": "internal",
+                "message": f"Log read error: {str(e)}"
             })]
 
     def _flush(self, *_):
