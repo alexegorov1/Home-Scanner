@@ -1,115 +1,148 @@
 import sys
-from time import sleep
-from colorama import Fore, Style, init
-from system.uptime_monitor import UptimeMonitor
-from monitoring.disk_monitor import DiskMonitor
+import asyncio
+import json
+from argparse import ArgumentParser, Namespace
 from core.logger import Logger
 from core.analysis import LogAnalyzer
-from core.database import IncidentDatabase
-from security.file_monitor import FileMonitor
-from monitoring.process_monitor import ProcessMonitor
-from core.scanner import NetworkScanner
 from core.alerts import AlertManager
+from core.database import IncidentDatabase
+from monitoring.process_monitor import ProcessMonitor
+from security.file_monitor import FileMonitor
+from monitoring.disk_monitor import DiskMonitor
+from system.uptime_monitor import UptimeMonitor
+from monitoring.user_activity_monitor import UserActivityMonitor
+from core.scanner import NetworkScanner
 
-init(autoreset=True)
 
 class HomescannerCLI:
-    def __init__(self, uptime_monitor, disk_monitor, logger, analyzer, db, file_monitor, process_monitor, scanner, alert_manager):
-        self.uptime_monitor = uptime_monitor
-        self.disk_monitor = disk_monitor
-        self.logger = logger
-        self.analyzer = analyzer
-        self.db = db
-        self.file_monitor = file_monitor
-        self.process_monitor = process_monitor
-        self.scanner = scanner
-        self.alert_manager = alert_manager
-        self.commands = {
-            "help": self.help,
-            "exit": self.exit,
-            "status": self.status,
-            "uptime": self.uptime,
-            "disk": self.disk,
-            "logs": self.logs,
-            "incidents": self.incidents,
-            "scan": self.manual_scan
-        }
+    def __init__(self, args: Namespace):
+        self.args = args
+        self.logger = Logger()
+        self.scanner = NetworkScanner()
+        self.analyzer = LogAnalyzer()
+        self.alert_manager = AlertManager()
+        self.db = IncidentDatabase()
+        self.process_monitor = ProcessMonitor()
+        self.file_monitor = FileMonitor()
+        self.disk_monitor = DiskMonitor()
+        self.uptime_monitor = UptimeMonitor()
+        self.user_monitor = UserActivityMonitor()
 
-    def start(self):
-        print(Fore.CYAN + "Homescanner CLI started. Type 'help' for commands.")
-        while True:
-            try:
-                command = input(Fore.YELLOW + "> ").strip().lower()
-                (self.commands.get(command) or self.unknown_command)()
-            except KeyboardInterrupt:
-                self.exit()
+    async def run(self):
+        if self.args.command == "status":
+            self.print_status()
+        elif self.args.command == "uptime":
+            self.print_uptime()
+        elif self.args.command == "disk":
+            self.check_disk()
+        elif self.args.command == "logs":
+            self.show_logs()
+        elif self.args.command == "incidents":
+            self.show_incidents()
+        elif self.args.command == "scan":
+            await self.manual_scan()
+        else:
+            print("Unknown command.")
 
-    def help(self):
-        print(Fore.GREEN + "\nAvailable commands:")
-        for cmd in self.commands:
-            print(f"  {cmd}")
-        print()
+    def print_status(self):
+        print("System is running. Monitors are active.")
 
-    def exit(self):
-        print(Fore.CYAN + "Exiting CLI...")
-        sleep(1)
-        sys.exit(0)
+    def print_uptime(self):
+        print(self.uptime_monitor.get_uptime())
 
-    def status(self):
-        print(Fore.GREEN + "System is running. Monitors are active.")
-
-    def uptime(self):
-        print(Fore.BLUE + self.uptime_monitor.get_uptime())
-
-    def disk(self):
+    def check_disk(self):
         warnings = self.disk_monitor.check_disk_usage()
         if warnings:
             for w in warnings:
-                print(Fore.RED + w)
+                print(w)
         else:
-            print(Fore.GREEN + "Disk usage is within normal limits.")
+            print("Disk usage is within normal limits.")
 
-    def logs(self):
-        print(Fore.MAGENTA + "\n--- Last 20 Log Entries ---")
-        for line in self.logger.read_logs(20):
-            print(line.strip())
-        print(Fore.MAGENTA + "---------------------------\n")
+    def show_logs(self):
+        logs = self.logger.read_logs(lines=self.args.lines)
+        if self.args.json:
+            print(json.dumps({"logs": logs}, indent=2))
+        else:
+            for line in logs:
+                print(line.strip())
 
-    def incidents(self):
+    def show_incidents(self):
         conn = self.db.get_connection()
         if not conn:
-            print(Fore.RED + "Failed to connect to the database.")
+            print("Failed to connect to the database.")
             return
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT timestamp, description FROM incidents ORDER BY timestamp DESC LIMIT 5")
+            cursor.execute("SELECT timestamp, description FROM incidents ORDER BY timestamp DESC LIMIT ?", (self.args.count,))
             rows = cursor.fetchall()
-            if not rows:
-                print(Fore.YELLOW + "No incidents found.")
+            if self.args.json:
+                print(json.dumps({"incidents": rows}, indent=2))
             else:
-                print(Fore.MAGENTA + "\n--- Recent Incidents ---")
                 for ts, desc in rows:
                     print(f"{ts} | {desc}")
-                print(Fore.MAGENTA + "------------------------\n")
         finally:
             conn.close()
 
-    def manual_scan(self):
-        print(Fore.CYAN + "Running full scan...")
+    async def manual_scan(self):
+        results = []
 
-        for threat in self.scanner.scan():
+        threats = await self.scanner.scan()
+        for threat in threats:
             self._report_issue("Threat detected", threat)
+            results.append(threat)
 
-        for anomaly in self.analyzer.analyze_logs():
+        anomalies = self.analyzer.analyze_logs()
+        for anomaly in anomalies:
             self._report_issue("Log anomaly detected", anomaly)
+            results.append(anomaly)
 
-        for file in self.file_monitor.check_files():
-            self._report_issue("Modified file detected", file)
+        files = self.file_monitor.check_files()
+        for f in files:
+            self._report_issue("Modified file detected", f)
+            results.append(f)
 
-        for proc in self.process_monitor.check_processes():
-            self._report_issue("Suspicious process detected", proc)
+        procs = self.process_monitor.check_processes()
+        for p in procs:
+            self._report_issue("Suspicious process detected", p)
+            results.append(p)
 
-        for warning in self.disk_monitor.check_disk_usage():
-            self._report_issue("Disk warning", warning)
+        warnings = self.disk_monitor.check_disk_usage()
+        for w in warnings:
+            self._report_issue("Disk warning", w)
+            results.append(w)
 
-        print(Fore.GREEN + "Scan complete.\n")
+        if self.args.json:
+            print(json.dumps({"scan_results": results}, indent=2))
+
+    def _report_issue(self, prefix, message):
+        entry = f"{prefix}: {message}"
+        self.logger.log(entry)
+        self.alert_manager.send_alert(message)
+        self.db.add_incident(message)
+        if not self.args.json:
+            print(entry)
+
+
+def build_parser():
+    parser = ArgumentParser(prog="homescanner")
+    subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser("status")
+    subparsers.add_parser("uptime")
+    subparsers.add_parser("disk")
+
+    logs_parser = subparsers.add_parser("logs")
+    logs_parser.add_argument("--lines", type=int, default=20)
+    logs_parser.add_argument("--json", action="store_true")
+
+    inc_parser = subparsers.add_parser("incidents")
+    inc_parser.add_argument("--count", type=int, default=5)
+    inc_parser.add_argument("--json", action="store_true")
+
+    scan_parser = subparsers.add_parser("scan")
+    scan_parser.add_argument("--json", action="store_true")
+
+    return parser
+
+if __name__ == "__main__":
+    main()
