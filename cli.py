@@ -144,5 +144,13 @@ def build_parser():
 
     return parser
 
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    cli = HomescannerCLI(args)
+    asyncio.run(cli.run())
+
+
 if __name__ == "__main__":
     main()
