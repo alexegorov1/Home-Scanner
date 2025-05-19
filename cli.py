@@ -113,11 +113,3 @@ class HomescannerCLI:
             self._report_issue("Disk warning", warning)
 
         print(Fore.GREEN + "Scan complete.\n")
-
-    def _report_issue(self, prefix, message):
-        entry = f"{prefix}: {message}"
-        self.logger.log(entry)
-        self.alert_manager.send_alert(message)
-        self.db.add_incident(message)
-        print(Fore.RED + entry)
-
