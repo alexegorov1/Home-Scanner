@@ -94,12 +94,29 @@ EOF
   fi
 }
 
+final_summary() {
+  echo ""
+  echo "=================================================="
+  echo "✅ Setup complete. Environment is ready."
+  echo "Activate environment with:"
+  echo "  source $VENV_DIR/bin/activate"
+  echo "Run Homescanner with:"
+  echo "  python main.py"
+  echo "Log output is recorded in: $LOG_FILE"
+  echo "=================================================="
+}
+
 main() {
   header
   check_command "$PYTHON_EXEC"
   check_command pip3
   check_python_version
   create_virtualenv
+  upgrade_core_packages
+  install_project_dependencies
+  prepare_directories
+  generate_default_config
+  create_gitignore
   final_summary
 }
 
