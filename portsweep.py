@@ -1,6 +1,7 @@
 import socket
 import time
 import ipaddress
+import random
 import functools
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,6 +18,15 @@ def _validate_ports(ports: Iterable[Union[int, str]]) -> List[int]:
         if 1 <= p_int <= 65535:
             uniq.add(p_int)
     return sorted(uniq)
+
+
+def _expand_targets(target: str) -> List[str]:
+    try:
+        net = ipaddress.ip_network(target, strict=False)
+        return [str(h) for h in net.hosts()]
+    except ValueError:
+        ipaddress.ip_address(target)
+        return [target]
 
 
 def sweep(
@@ -66,5 +76,30 @@ def sweep(
                 "status": status,
                 "latency_ms": elapsed,
                 "banner": bann,
+            }
+        return {}
+
+    def scan_udp(host: str, port: int) -> Dict[str, Optional[Union[str, float]]]:
+        start = time.perf_counter()
+        status = "open|filtered"
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
+                s.settimeout(timeout)
+                s.sendto(b"\x00", (host, port))
+                s.recvfrom(1024)
+                status = "open"
+        except socket.timeout:
+            status = "open|filtered"
+        except OSError:
+            status = "closed"
+        elapsed = round((time.perf_counter() - start) * 1000, 2)
+        if status != "closed" or include_closed:
+            return {
+                "ip": host,
+                "port": port,
+                "proto": "udp",
+                "status": status,
+                "latency_ms": elapsed,
+                "banner": None,
             }
         return {}
