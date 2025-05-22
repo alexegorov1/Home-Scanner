@@ -123,3 +123,6 @@ async def sweep_async(
 
     await asyncio.gather(*tasks)
     return [asdict(r) for r in sorted(results, key=lambda x: (x.ip, x.port, x.proto))]
+
+def sweep(*args, **kwargs):
+    return asyncio.run(sweep_async(*args, **kwargs))
