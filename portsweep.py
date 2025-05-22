@@ -1,23 +1,44 @@
 import socket
 import time
-from typing import List, Tuple, Union, Optional, Dict
+import ipaddress
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Optional
 
 
 def sweep_host_ports(
     ip: str,
     ports: List[int],
-    timeout: float = 0.5,
+    connect_timeout: float = 0.5,
+    banner_timeout: float = 0.3,
     grab_banner: bool = False,
-    detailed: bool = False
-) -> Union[
-    List[int],
-    List[Tuple[int, str]],
-    List[Dict[str, Union[str, int, float]]]
-]:
-    return list(filter(None, (
-        _scan_port(ip, port, timeout, grab_banner, detailed) for port in ports
-    )))
+    include_closed: bool = False,
+    workers: int = 100,
+) -> List[Dict[str, Optional[str]]]:
+    ipaddress.ip_address(ip)  # raise ValueError для некорректного IP
+    ports = [p for p in ports if 0 < p < 65536]
 
-        return (port, banner) if grab_banner else port
-    except:
-        return None
+    def task(port: int) -> Dict[str, Optional[str]]:
+        start = time.perf_counter()
+        banner = None
+        status = "closed"
+        try:
+            with socket.create_connection((ip, port), timeout=connect_timeout) as sock:
+                status = "open"
+                if grab_banner:
+                    sock.settimeout(banner_timeout)
+                    try:
+                        banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
+                    except socket.timeout:
+                        banner = "N/A"
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            pass
+        elapsed = round((time.perf_counter() - start) * 1000, 2)
+        if status == "open" or include_closed:
+            return {
+                "ip": ip,
+                "port": port,
+                "status": status,
+                "response_time_ms": elapsed,
+                "banner": banner,
+            }
+        return {}
