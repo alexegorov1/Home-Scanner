@@ -1,126 +1,104 @@
-import socket
-import time
+import asyncio
 import ipaddress
 import random
-import functools
-from contextlib import closing
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Iterable, List, Dict, Optional, Union
+import socket
+import struct
+import time
+from dataclasses import dataclass, asdict
+from typing import Iterable, List, Dict, Union, Optional, Sequence
 
+@dataclass(slots=True)
+class ScanResult:
+    ip: str
+    port: int
+    proto: str
+    status: str
+    latency_ms: float
+    banner: Optional[str] = None
+    reason: Optional[str] = None
 
-def _validate_ports(ports: Iterable[Union[int, str]]) -> List[int]:
-    uniq: set[int] = set()
-    for p in ports:
+def _parse_ports(items: Iterable[Union[int, str]]) -> List[int]:
+    ports: set[int] = set()
+    for item in items:
+        if isinstance(item, int):
+            ports.add(item)
+        else:
+            part = str(item).strip()
+            if "-" in part:
+                lo, hi = part.split("-", 1)
+                ports.update(range(int(lo), int(hi) + 1))
+            else:
+                ports.add(int(part))
+    return sorted(p for p in ports if 1 <= p <= 65535)
+
+def _expand_targets(targets: Sequence[str]) -> List[str]:
+    expanded: list[str] = []
+    for t in targets:
         try:
-            p_int = int(p)
-        except (TypeError, ValueError):
-            continue
-        if 1 <= p_int <= 65535:
-            uniq.add(p_int)
-    return sorted(uniq)
+            net = ipaddress.ip_network(t, strict=False)
+            expanded.extend(str(h) for h in net.hosts())
+        except ValueError:
+            expanded.append(str(ipaddress.ip_address(t)))
+    return expanded
 
-
-def _expand_targets(target: str) -> List[str]:
+async def _tcp_probe(host: str, port: int, timeout: float, grab_banner: bool, banner_timeout: float) -> ScanResult:
+    start = time.perf_counter()
+    banner = None
+    reason = None
     try:
-        net = ipaddress.ip_network(target, strict=False)
-        return [str(h) for h in net.hosts()]
-    except ValueError:
-        ipaddress.ip_address(target)
-        return [target]
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+        status = "open"
+        if grab_banner:
+            try:
+                banner = await asyncio.wait_for(reader.read(1024), timeout=banner_timeout)
+                banner = banner.decode(errors="ignore").strip() or "N/A"
+            except asyncio.TimeoutError:
+                banner = "N/A"
+        writer.close()
+        await writer.wait_closed()
+    except (asyncio.TimeoutError, ConnectionRefusedError):
+        status = "closed"
+        reason = "timeout" if isinstance(sys.exc_info()[1], asyncio.TimeoutError) else "refused"
+    except OSError as e:
+        status = "error"
+        reason = str(e)
+    latency = (time.perf_counter() - start) * 1000
+    return ScanResult(host, port, "tcp", status, round(latency, 2), banner, reason)
 
-
-def sweep(
-    target: str | List[str],
+async def sweep_async(
+    targets: Sequence[str] | str,
     ports: Iterable[Union[int, str]],
     tcp: bool = True,
     udp: bool = False,
     timeout: float = 0.5,
-    banner_timeout: float = 0.3,
     banner: bool = False,
+    banner_timeout: float = 0.3,
     include_closed: bool = False,
     shuffle: bool = False,
-    workers: int = 200,
-) -> List[Dict[str, Optional[Union[str, float]]]]:
-    targets = (
-        sum((_expand_targets(t) for t in target), [])
-        if isinstance(target, list)
-        else _expand_targets(target)
-    )
-    scan_ports = _validate_ports(ports)
+    concurrency: int = 500,
+) -> List[Dict[str, Union[str, int, float, None]]]:
+    t_list = _expand_targets([targets] if isinstance(targets, str) else targets)
+    p_list = _parse_ports(ports)
     if shuffle:
-        random.shuffle(targets)
-        random.shuffle(scan_ports)
+        random.shuffle(t_list)
+        random.shuffle(p_list)
 
-    def scan_tcp(host: str, port: int) -> Dict[str, Optional[Union[str, float]]]:
-        start = time.perf_counter()
-        status = "closed"
-        bann = None
-        try:
-            with socket.create_connection((host, port), timeout=timeout) as s:
-                status = "open"
-                if banner:
-                    s.settimeout(banner_timeout)
-                    try:
-                        data = s.recv(1024)
-                        bann = data.decode(errors="ignore").strip() or "N/A"
-                    except socket.timeout:
-                        bann = "N/A"
-        except (ConnectionRefusedError, socket.timeout, OSError):
-            pass
-        elapsed = round((time.perf_counter() - start) * 1000, 2)
-        if status == "open" or include_closed:
-            return {
-                "ip": host,
-                "port": port,
-                "proto": "tcp",
-                "status": status,
-                "latency_ms": elapsed,
-                "banner": bann,
-            }
-        return {}
+    sem = asyncio.Semaphore(concurrency)
+    results: list[ScanResult] = []
 
-    def scan_udp(host: str, port: int) -> Dict[str, Optional[Union[str, float]]]:
-        start = time.perf_counter()
-        status = "open|filtered"
-        try:
-            with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
-                s.settimeout(timeout)
-                s.sendto(b"\x00", (host, port))
-                s.recvfrom(1024)
-                status = "open"
-        except socket.timeout:
-            status = "open|filtered"
-        except OSError:
-            status = "closed"
-        elapsed = round((time.perf_counter() - start) * 1000, 2)
-        if status != "closed" or include_closed:
-            return {
-                "ip": host,
-                "port": port,
-                "proto": "udp",
-                "status": status,
-                "latency_ms": elapsed,
-                "banner": None,
-            }
-        return {}
-
-    results: list[dict] = []
-    tasks: list[tuple] = []
-    for h in targets:
-        for p in scan_ports:
-            if tcp:
-                tasks.append((scan_tcp, h, p))
-            if udp:
-                tasks.append((scan_udp, h, p))
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = [
-            pool.submit(func, host, prt)
-            for func, host, prt in tasks
-        ]
-        for f in as_completed(futs):
-            res = f.result()
-            if res:
+    async def guard(coro):
+        async with sem:
+            res = await coro
+            if include_closed or res.status not in {"closed", "error"}:
                 results.append(res)
 
-    return sorted(results, key=lambda x: (x["ip"], x["port"], x["proto"]))
+    tasks = []
+    for ip in t_list:
+        for port in p_list:
+            if tcp:
+                tasks.append(asyncio.create_task(guard(_tcp_probe(ip, port, timeout, banner, banner_timeout))))
+            if udp:
+                tasks.append(asyncio.create_task(guard(_udp_probe(ip, port, timeout))))
+
+    await asyncio.gather(*tasks)
+    return [asdict(r) for r in sorted(results, key=lambda x: (x.ip, x.port, x.proto))]
