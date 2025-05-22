@@ -1,53 +1,80 @@
 import socket
 import time
 import ipaddress
+import random
+import functools
+from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Optional
+from typing import Iterable, List, Dict, Optional, Union
 
 
-def sweep_host_ports(
-    ip: str,
-    ports: List[int],
-    connect_timeout: float = 0.5,
-    banner_timeout: float = 0.3,
-    grab_banner: bool = False,
-    include_closed: bool = False,
-    workers: int = 100,
-) -> List[Dict[str, Optional[str]]]:
-    ipaddress.ip_address(ip)  # raise ValueError для некорректного IP
-    ports = [p for p in ports if 0 < p < 65536]
-
-    def task(port: int) -> Dict[str, Optional[str]]:
-        start = time.perf_counter()
-        banner = None
-        status = "closed"
+def _validate_ports(ports: Iterable[Union[int, str]]) -> List[int]:
+    uniq: set[int] = set()
+    for p in ports:
         try:
-            with socket.create_connection((ip, port), timeout=connect_timeout) as sock:
+            p_int = int(p)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= p_int <= 65535:
+            uniq.add(p_int)
+    return sorted(uniq)
+
+
+def _expand_targets(target: str) -> List[str]:
+    try:
+        net = ipaddress.ip_network(target, strict=False)
+        return [str(h) for h in net.hosts()]
+    except ValueError:
+        ipaddress.ip_address(target)
+        return [target]
+
+
+def sweep(
+    target: str | List[str],
+    ports: Iterable[Union[int, str]],
+    tcp: bool = True,
+    udp: bool = False,
+    timeout: float = 0.5,
+    banner_timeout: float = 0.3,
+    banner: bool = False,
+    include_closed: bool = False,
+    shuffle: bool = False,
+    workers: int = 200,
+) -> List[Dict[str, Optional[Union[str, float]]]]:
+    targets = (
+        sum((_expand_targets(t) for t in target), [])
+        if isinstance(target, list)
+        else _expand_targets(target)
+    )
+    scan_ports = _validate_ports(ports)
+    if shuffle:
+        random.shuffle(targets)
+        random.shuffle(scan_ports)
+
+    def scan_tcp(host: str, port: int) -> Dict[str, Optional[Union[str, float]]]:
+        start = time.perf_counter()
+        status = "closed"
+        bann = None
+        try:
+            with socket.create_connection((host, port), timeout=timeout) as s:
                 status = "open"
-                if grab_banner:
-                    sock.settimeout(banner_timeout)
+                if banner:
+                    s.settimeout(banner_timeout)
                     try:
-                        banner = sock.recv(1024).decode(errors="ignore").strip() or "N/A"
+                        data = s.recv(1024)
+                        bann = data.decode(errors="ignore").strip() or "N/A"
                     except socket.timeout:
-                        banner = "N/A"
+                        bann = "N/A"
         except (ConnectionRefusedError, socket.timeout, OSError):
             pass
         elapsed = round((time.perf_counter() - start) * 1000, 2)
         if status == "open" or include_closed:
             return {
-                "ip": ip,
+                "ip": host,
                 "port": port,
+                "proto": "tcp",
                 "status": status,
-                "response_time_ms": elapsed,
-                "banner": banner,
+                "latency_ms": elapsed,
+                "banner": bann,
             }
         return {}
-
-    results: List[Dict[str, Optional[str]]] = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(task, p) for p in ports]
-        for fut in as_completed(futures):
-            res = fut.result()
-            if res:
-                results.append(res)
-    return sorted(results, key=lambda x: x["port"])
