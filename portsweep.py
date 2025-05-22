@@ -65,6 +65,27 @@ async def _tcp_probe(host: str, port: int, timeout: float, grab_banner: bool, ba
     latency = (time.perf_counter() - start) * 1000
     return ScanResult(host, port, "tcp", status, round(latency, 2), banner, reason)
 
+async def _udp_probe(host: str, port: int, timeout: float) -> ScanResult:
+    start = time.perf_counter()
+    status = "open|filtered"
+    reason = None
+    try:
+        loop = asyncio.get_running_loop()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setblocking(False)
+        await loop.sock_sendto(sock, b"\x00", (host, port))
+        await asyncio.wait_for(loop.sock_recvfrom(sock, 1024), timeout=timeout)
+        status = "open"
+    except asyncio.TimeoutError:
+        reason = "no‑reply"
+    except OSError as e:
+        status = "closed"
+        reason = str(e)
+    finally:
+        sock.close()
+    latency = (time.perf_counter() - start) * 1000
+    return ScanResult(host, port, "udp", status, round(latency, 2), None, reason)
+
 async def sweep_async(
     targets: Sequence[str] | str,
     ports: Iterable[Union[int, str]],
