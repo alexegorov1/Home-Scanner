@@ -42,3 +42,12 @@ def sweep_host_ports(
                 "banner": banner,
             }
         return {}
+
+    results: List[Dict[str, Optional[str]]] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(task, p) for p in ports]
+        for fut in as_completed(futures):
+            res = fut.result()
+            if res:
+                results.append(res)
+    return sorted(results, key=lambda x: x["port"])
