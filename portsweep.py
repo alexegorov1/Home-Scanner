@@ -103,3 +103,24 @@ def sweep(
                 "banner": None,
             }
         return {}
+
+    results: list[dict] = []
+    tasks: list[tuple] = []
+    for h in targets:
+        for p in scan_ports:
+            if tcp:
+                tasks.append((scan_tcp, h, p))
+            if udp:
+                tasks.append((scan_udp, h, p))
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [
+            pool.submit(func, host, prt)
+            for func, host, prt in tasks
+        ]
+        for f in as_completed(futs):
+            res = f.result()
+            if res:
+                results.append(res)
+
+    return sorted(results, key=lambda x: (x["ip"], x["port"], x["proto"]))
