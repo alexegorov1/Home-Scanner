@@ -1,7 +1,6 @@
 import socket
 import time
 import ipaddress
-import random
 import functools
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,15 +17,6 @@ def _validate_ports(ports: Iterable[Union[int, str]]) -> List[int]:
         if 1 <= p_int <= 65535:
             uniq.add(p_int)
     return sorted(uniq)
-
-
-def _expand_targets(target: str) -> List[str]:
-    try:
-        net = ipaddress.ip_network(target, strict=False)
-        return [str(h) for h in net.hosts()]
-    except ValueError:
-        ipaddress.ip_address(target)
-        return [target]
 
 
 def sweep(
