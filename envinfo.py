@@ -25,31 +25,3 @@ def get_env_info() -> Dict[str, str]:
         }
     except Exception as e:
         return {"error": str(e)}
-
-
-def _get_local_ip() -> str:
-    try:
-        with socket.create_connection(("8.8.8.8", 80), timeout=1) as s:
-            return s.getsockname()[0]
-    except Exception:
-        return "unknown"
-
-
-def _detect_virtualization() -> str:
-    try:
-        if platform.system() == "Linux":
-            with open("/proc/cpuinfo", encoding="utf-8") as f:
-                text = f.read().lower()
-                if any(term in text for term in ("hypervisor", "kvm", "vmware", "xen", "qemu", "vbox")):
-                    return "yes"
-        return "no"
-    except Exception:
-        return "unknown"
-
-
-def _get_disk_total_gb() -> str:
-    try:
-        total, _, _ = shutil.disk_usage(os.getcwd())
-        return str(round(total / (1024 ** 3), 1))
-    except Exception:
-        return "unknown"
