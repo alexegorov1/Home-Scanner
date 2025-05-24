@@ -1,7 +1,4 @@
 import os
-import platform
-import socket
-import shutil
 import multiprocessing
 from typing import Dict
 
@@ -34,7 +31,6 @@ def _local_ip() -> str:
     except:
         return "unknown"
 
-
 def _is_virtualized() -> str:
     if platform.system() != "Linux":
         return "no"
@@ -46,4 +42,3 @@ def _is_virtualized() -> str:
         return "no"
     except:
         return "unknown"
-
