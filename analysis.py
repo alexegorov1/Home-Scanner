@@ -1,6 +1,5 @@
 import re
 from core.logger import Logger
-from core.config_loader import load_detection_rules
 
 class LogAnalyzer:
     def __init__(self):
