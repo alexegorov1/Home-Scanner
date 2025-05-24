@@ -29,14 +29,6 @@ def _get_local_ip() -> str:
     except Exception:
         return "unknown"
 
-
-def _detect_virtualization() -> str:
-    try:
-        if platform.system() == "Linux":
-            with open("/proc/cpuinfo", encoding="utf-8") as f:
-                text = f.read().lower()
-                if any(term in text for term in ("hypervisor", "kvm", "vmware", "xen", "qemu")):
-                    return "yes"
         return "no"
     except Exception:
         return "unknown"
