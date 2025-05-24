@@ -1,4 +1,7 @@
 import os
+import platform
+import socket
+import shutil
 import multiprocessing
 from typing import Dict
 
@@ -31,6 +34,7 @@ def _local_ip() -> str:
     except:
         return "unknown"
 
+
 def _is_virtualized() -> str:
     if platform.system() != "Linux":
         return "no"
@@ -40,5 +44,13 @@ def _is_virtualized() -> str:
             if any(x in txt for x in ("hypervisor", "kvm", "vmware", "xen", "qemu", "vbox")):
                 return "yes"
         return "no"
+    except:
+        return "unknown"
+
+
+def _disk_gb() -> str:
+    try:
+        total, _, _ = shutil.disk_usage(os.getcwd())
+        return str(round(total / 1_073_741_824, 1))
     except:
         return "unknown"
