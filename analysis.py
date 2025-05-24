@@ -1,5 +1,6 @@
 import re
 from core.logger import Logger
+from core.config_loader import load_detection_rules
 
 class LogAnalyzer:
     def __init__(self):
@@ -9,13 +10,12 @@ class LogAnalyzer:
     def analyze_logs(self):
         try:
             logs = self.logger.read_logs()
-        except (FileNotFoundError, IOError):
-            return ["Log file not found. No logs to analyze."]
-        except Exception as e:
-            return [f"Error reading logs: {e}"]
+        except (OSError, IOError, FileNotFoundError) as e:
+            return [f"Log read error: {e}"]
+
         return [
-            f"[{rule.get('title', 'Unnamed Rule')}] {line.strip()}"
+            f"[{r.get('title', 'Unnamed')}] {line.strip()}"
             for line in logs
-            for rule in self.rules
-            if self._match(rule.get("detection", {}).get("selection", {}), line)
+            for r in self.rules
+            if self._match(r.get("detection", {}).get("selection", {}), line)
         ]
