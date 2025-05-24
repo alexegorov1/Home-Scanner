@@ -20,14 +20,3 @@ class LogAnalyzer:
             for rule in self.rules
             if self._match(rule.get("detection", {}).get("selection", {}), line)
         ]
-
-    def _match(self, selection, text):
-        try:
-            text = text.lower()
-            return any(
-                any(re.search(re.escape(s), text, re.IGNORECASE) for s in ([v] if isinstance(v, str) else v))
-                for v in selection.values()
-                if isinstance(v, (str, list))
-            )
-        except:
-            return False
