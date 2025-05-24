@@ -28,7 +28,6 @@ def _get_local_ip() -> str:
             return s.getsockname()[0]
     except Exception:
         return "unknown"
-
         return "no"
     except Exception:
         return "unknown"
