@@ -17,15 +17,6 @@ class DiskMonitor:
         os.makedirs(self.snapshot_dir, exist_ok=True)
         self.logger = self._setup_logger(log_file)
 
-    def _setup_logger(self, log_file):
-        logger = logging.getLogger(f"DiskMonitor:{self.path}")
-        logger.setLevel(logging.INFO)
-        if not logger.hasHandlers():
-            handler = logging.FileHandler(log_file, encoding="utf-8") if log_file else logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"))
-            logger.addHandler(handler)
-        return logger
-
     def check_disk_usage(self):
         if not os.path.exists(self.path):
             msg = f"Path does not exist: {self.path}"
