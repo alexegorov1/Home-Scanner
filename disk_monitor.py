@@ -58,21 +58,6 @@ class DiskMonitor:
             self.logger.exception(msg)
             return [msg]
 
-    def _save_snapshot(self, percent_used, total_gb, used_gb, free_gb):
-        snapshot = {
-            "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
-            "path": self.path,
-            "percent_used": round(percent_used, 2),
-            "total_gb": round(total_gb, 2),
-            "used_gb": round(used_gb, 2),
-            "free_gb": round(free_gb, 2)
-        }
-        try:
-            with open(os.path.join(self.snapshot_dir, f"{int(time.time())}_disk_snapshot.json"), "w", encoding="utf-8") as f:
-                json.dump(snapshot, f, indent=2)
-        except Exception as e:
-            self.logger.warning(f"Failed to save snapshot: {e}")
-
     def export_status(self, output_path):
         try:
             usage = shutil.disk_usage(self.path)
