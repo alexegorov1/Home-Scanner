@@ -2,8 +2,6 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from core.config_loader import load_config
-from socket import gaierror, timeout
 from datetime import datetime
 
 class AlertManager:
