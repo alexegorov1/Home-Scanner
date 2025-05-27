@@ -16,6 +16,15 @@ class Selector:
     pattern: re.Pattern
 
 @dataclass
+class Rule:
+    id: str
+    title: str
+    selectors: List[Selector]
+    neg_selectors: List[Selector]
+    threshold: int
+    window: int
+
+@dataclass
 class Finding:
     rule_id: str
     title: str
@@ -48,12 +57,53 @@ class LogAnalyzer:
             "files": len(self.offsets),
         }
 
+    def _scan(self) -> Iterator[Finding]:
+        for path in sorted(glob.glob(self.LOG_MASK)):
+            pos = self.offsets.get(path, 0)
+            try:
+                with open(path, encoding="utf-8", errors="ignore") as f:
+                    f.seek(pos)
+                    for line in f:
+                        ts = datetime.utcnow().isoformat(timespec="seconds")
+                        for rule in self.rules:
+                            if self._hit(rule, line) and not self._over_threshold(rule, ts):
+                                yield Finding(rule.id, rule.title, ts, path, line)
+                    self.offsets[path] = f.tell()
+            except OSError as e:
+                self.logger.log(f"Log read error: {e}", level="error")
+
     def _hit(self, rule: Rule, line: str) -> bool:
         text = line.lower()
         if rule.neg_selectors and any(sel.pattern.search(text) for sel in rule.neg_selectors):
             return False
         return all(sel.pattern.search(text) for sel in rule.selectors)
-        
+
+    def _over_threshold(self, rule: Rule, ts: str) -> bool:
+        if not rule.window:
+            return False
+        bucket = int(datetime.fromisoformat(ts).timestamp()) // rule.window
+        counter = self.hit_counter[rule.id]
+        counter[bucket] = counter.get(bucket, 0) + 1
+        return counter[bucket] > rule.threshold
+
+    def _compile_rules(self, raw: List[Dict]) -> List[Rule]:
+        compiled = []
+        for r in raw:
+            det = r.get("detection", {})
+            sel = det.get("selection", {})
+            neg = det.get("exclude", {})
+            compiled.append(
+                Rule(
+                    id=r.get("id", ""),
+                    title=r.get("title", ""),
+                    selectors=self._build_selectors(sel),
+                    neg_selectors=self._build_selectors(neg),
+                    threshold=int(r.get("threshold", 1)),
+                    window=int(r.get("window_sec", 0)),
+                )
+            )
+        return compiled
+
     def _load_state(self):
         if os.path.exists(self.STATE_PATH):
             try:
@@ -62,3 +112,11 @@ class LogAnalyzer:
                 self.hit_counter = defaultdict(dict, {k: {int(b): c for b, c in v.items()} for k, v in data.get("hits", {}).items()})
             except Exception:
                 self.offsets, self.hit_counter = {}, defaultdict(dict)
+
+    def _save_state(self):
+        try:
+            os.makedirs(os.path.dirname(self.STATE_PATH), exist_ok=True)
+            data = {"offsets": self.offsets, "hits": self.hit_counter}
+            json.dump(data, open(self.STATE_PATH, "w", encoding="utf-8"))
+        except Exception as e:
+            self.logger.log(f"State save failed: {e}", level="warning")
