@@ -48,21 +48,6 @@ class LogAnalyzer:
             "files": len(self.offsets),
         }
 
-    def _scan(self) -> Iterator[Finding]:
-        for path in sorted(glob.glob(self.LOG_MASK)):
-            pos = self.offsets.get(path, 0)
-            try:
-                with open(path, encoding="utf-8", errors="ignore") as f:
-                    f.seek(pos)
-                    for line in f:
-                        ts = datetime.utcnow().isoformat(timespec="seconds")
-                        for rule in self.rules:
-                            if self._hit(rule, line) and not self._over_threshold(rule, ts):
-                                yield Finding(rule.id, rule.title, ts, path, line)
-                    self.offsets[path] = f.tell()
-            except OSError as e:
-                self.logger.log(f"Log read error: {e}", level="error")
-
     def _hit(self, rule: Rule, line: str) -> bool:
         text = line.lower()
         if rule.neg_selectors and any(sel.pattern.search(text) for sel in rule.neg_selectors):
