@@ -16,15 +16,6 @@ class Selector:
     pattern: re.Pattern
 
 @dataclass
-class Rule:
-    id: str
-    title: str
-    selectors: List[Selector]
-    neg_selectors: List[Selector]
-    threshold: int
-    window: int
-
-@dataclass
 class Finding:
     rule_id: str
     title: str
