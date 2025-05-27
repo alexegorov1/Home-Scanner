@@ -61,25 +61,7 @@ class LogAnalyzer:
         counter = self.hit_counter[rule.id]
         counter[bucket] = counter.get(bucket, 0) + 1
         return counter[bucket] > rule.threshold
-
-    def _compile_rules(self, raw: List[Dict]) -> List[Rule]:
-        compiled = []
-        for r in raw:
-            det = r.get("detection", {})
-            sel = det.get("selection", {})
-            neg = det.get("exclude", {})
-            compiled.append(
-                Rule(
-                    id=r.get("id", ""),
-                    title=r.get("title", ""),
-                    selectors=self._build_selectors(sel),
-                    neg_selectors=self._build_selectors(neg),
-                    threshold=int(r.get("threshold", 1)),
-                    window=int(r.get("window_sec", 0)),
-                )
-            )
-        return compiled
-
+        
     def _load_state(self):
         if os.path.exists(self.STATE_PATH):
             try:
