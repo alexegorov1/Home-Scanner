@@ -12,19 +12,6 @@ class CorrelationEngine:
             self._pattern_ransomware_like_behavior,
             self._pattern_post_login_file_activity
         ]
-        
-    def _now(self):
-        return datetime.utcnow()
-
-    def ingest_event(self, event):
-        timestamp = event.get("timestamp")
-        if not isinstance(timestamp, datetime):
-            timestamp = self._now()
-        event["timestamp"] = timestamp
-
-        self.events.append(event)
-        self._expire_old_events()
-        self._check_patterns()
 
     def _expire_old_events(self):
         cutoff = self._now() - self.time_window
