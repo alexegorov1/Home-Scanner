@@ -72,6 +72,8 @@ class Logger:
             return
 
         level = level.lower()
+        if level not in self._valid_levels:
+            level = "info"
 
         event_type = event_type.lower()
         if event_type not in self._valid_events:
