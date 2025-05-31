@@ -111,15 +111,6 @@ class HomescannerCLI:
         if self.args.json:
             print(json.dumps({"scan_results": results}, indent=2))
 
-    def _report_issue(self, prefix, message):
-        entry = f"{prefix}: {message}"
-        self.logger.log(entry)
-        self.alert_manager.send_alert(message)
-        self.db.add_incident(message)
-        if not self.args.json:
-            print(entry)
-
-
 def build_parser():
     parser = ArgumentParser(prog="homescanner")
     subparsers = parser.add_subparsers(dest="command")
