@@ -6,6 +6,9 @@ from core.logger import Logger
 from core.analysis import LogAnalyzer
 from core.alerts import AlertManager
 from core.database import IncidentDatabase
+from monitoring.process_monitor import ProcessMonitor
+from security.file_monitor import FileMonitor
+from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
 from monitoring.user_activity_monitor import UserActivityMonitor
 from core.scanner import NetworkScanner
@@ -110,6 +113,15 @@ class HomescannerCLI:
 
         if self.args.json:
             print(json.dumps({"scan_results": results}, indent=2))
+
+    def _report_issue(self, prefix, message):
+        entry = f"{prefix}: {message}"
+        self.logger.log(entry)
+        self.alert_manager.send_alert(message)
+        self.db.add_incident(message)
+        if not self.args.json:
+            print(entry)
+
 
 def build_parser():
     parser = ArgumentParser(prog="homescanner")
