@@ -68,10 +68,6 @@ class IncidentDatabase:
                     conditions.append("type = ?")
                     params.append(type.strip().lower())
 
-                if source:
-                    conditions.append("source = ?")
-                    params.append(source.strip().lower())
-
                 if since:
                     conditions.append("timestamp >= ?")
                     params.append(since)
