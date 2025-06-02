@@ -111,12 +111,6 @@ def health_check(components):
         logger.log(f"Health Check Error: Database failure - {e}", level="error")
 
     try:
-        test_threats = scanner.scan_sync()
-        logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
-
-    try:
         file_monitor.check_files()
         logger.log("File monitor test ran successfully.", level="info")
     except Exception as e:
