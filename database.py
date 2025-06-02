@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import logging
+from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
@@ -12,6 +13,13 @@ class IncidentDatabase:
         self._lock = Lock()
         self._ensure_directory()
         self._initialize_database()
+
+    def _ensure_directory(self):
+        try:
+            self.db_file.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logging.exception(f"[DB INIT] Failed to create directory: {e}")
+            raise RuntimeError("Could not create directory for database")
 
     def _initialize_database(self):
         try:
@@ -29,6 +37,9 @@ class IncidentDatabase:
         except sqlite3.Error as e:
             logging.exception(f"[DB INIT] Schema initialization failed: {e}")
             raise RuntimeError("Failed to initialize database schema")
+
+    def _connect(self):
+        return sqlite3.connect(self.db_file, detect_types=sqlite3.PARSE_DECLTYPES)
 
     def add_incident(self, description, type="generic", severity="info", source="unknown"):
         if not isinstance(description, str) or not description.strip():
@@ -63,6 +74,18 @@ class IncidentDatabase:
                 if severity:
                     conditions.append("severity = ?")
                     params.append(severity.strip().lower())
+
+                if type:
+                    conditions.append("type = ?")
+                    params.append(type.strip().lower())
+
+                if source:
+                    conditions.append("source = ?")
+                    params.append(source.strip().lower())
+
+                if since:
+                    conditions.append("timestamp >= ?")
+                    params.append(since)
 
                 if conditions:
                     query += " WHERE " + " AND ".join(conditions)
