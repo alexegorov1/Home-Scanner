@@ -5,6 +5,9 @@ from core.scanner import NetworkScanner
 from core.analysis import LogAnalyzer
 from core.alerts import AlertManager
 from core.database import IncidentDatabase
+from monitoring.process_monitor import ProcessMonitor
+from security.file_monitor import FileMonitor
+from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
 from monitoring.user_activity_monitor import UserActivityMonitor
 from api.server import run_api_server
@@ -75,6 +78,20 @@ def main_loop(components):
                 alert_manager.send_alert(message)
                 db.add_incident(message, type="process", severity="warning", source="process_monitor")
 
+            modified_files = file_monitor.check_files()
+            for file in modified_files:
+                message = f"Modified file detected: {file}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="filesystem", severity="warning", source="file_monitor")
+
+            disk_warnings = disk_monitor.check_disk_usage()
+            for warning in disk_warnings:
+                message = f"Disk warning: {warning}"
+                logger.log(message, level="warning")
+                alert_manager.send_alert(message)
+                db.add_incident(message, type="disk", severity="warning", source="disk_monitor")
+
             new_logins = user_activity_monitor.check_new_logins()
             for login in new_logins:
                 message = f"New user login detected: {login}"
@@ -109,6 +126,12 @@ def health_check(components):
             logger.log("Database connection check passed.", level="info")
     except Exception as e:
         logger.log(f"Health Check Error: Database failure - {e}", level="error")
+
+    try:
+        test_threats = scanner.scan_sync()
+        logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
+    except Exception as e:
+        logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
 
     try:
         file_monitor.check_files()
