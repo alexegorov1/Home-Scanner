@@ -64,10 +64,6 @@ class IncidentDatabase:
                     conditions.append("severity = ?")
                     params.append(severity.strip().lower())
 
-                if type:
-                    conditions.append("type = ?")
-                    params.append(type.strip().lower())
-
                 if conditions:
                     query += " WHERE " + " AND ".join(conditions)
 
