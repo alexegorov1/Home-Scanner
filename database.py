@@ -14,13 +14,6 @@ class IncidentDatabase:
         self._ensure_directory()
         self._initialize_database()
 
-    def _ensure_directory(self):
-        try:
-            self.db_file.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logging.exception(f"[DB INIT] Failed to create directory: {e}")
-            raise RuntimeError("Could not create directory for database")
-
     def _initialize_database(self):
         try:
             with self._connect() as conn:
