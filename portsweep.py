@@ -1,6 +1,9 @@
 import asyncio
 import ipaddress
 import random
+import socket
+import struct
+import time
 from dataclasses import dataclass, asdict
 from typing import Iterable, List, Dict, Union, Optional, Sequence
 
@@ -73,6 +76,8 @@ async def _udp_probe(host: str, port: int, timeout: float) -> ScanResult:
         await loop.sock_sendto(sock, b"\x00", (host, port))
         await asyncio.wait_for(loop.sock_recvfrom(sock, 1024), timeout=timeout)
         status = "open"
+    except asyncio.TimeoutError:
+        reason = "no‑reply"
     except OSError as e:
         status = "closed"
         reason = str(e)
