@@ -126,6 +126,11 @@ if "%1"=="run" (
     goto :eof
 )
 
+if "%1"=="logs" (
+    call :tail_logs
+    goto :eof
+)
+
 if "%1"=="clean" (
     call :clean_up
     goto :eof
@@ -135,6 +140,3 @@ if "%1"=="rebuild" (
     call :rebuild
     goto :eof
 )
-
-call :help
-endlocal
