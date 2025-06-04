@@ -73,8 +73,6 @@ async def _udp_probe(host: str, port: int, timeout: float) -> ScanResult:
         await loop.sock_sendto(sock, b"\x00", (host, port))
         await asyncio.wait_for(loop.sock_recvfrom(sock, 1024), timeout=timeout)
         status = "open"
-    except asyncio.TimeoutError:
-        reason = "no‑reply"
     except OSError as e:
         status = "closed"
         reason = str(e)
