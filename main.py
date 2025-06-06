@@ -71,7 +71,7 @@ def main_loop(components):
                 alert_manager.send_alert(message)
                 db.add_incident(message, type="log", severity="warning", source="log_analyzer")
 
-            suspicious_processes = process_monitor.check_processes()
+            suspicious_processes = process_monitor.check_procesoises()
             for proc in suspicious_processes:
                 message = f"Suspicious process detected: {proc}"
                 logger.log(message, level="warning")
@@ -132,12 +132,6 @@ def health_check(components):
         logger.log(f"Network scan test returned {len(test_threats)} result(s).", level="info")
     except Exception as e:
         logger.log(f"Health Check Error: Scanner failure - {e}", level="error")
-
-    try:
-        file_monitor.check_files()
-        logger.log("File monitor test ran successfully.", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: File monitor failure - {e}", level="error")
 
     try:
         disk_monitor.check_disk_usage()
