@@ -36,6 +36,27 @@ class LogAnalyzer:
     STATE_PATH = "cache/analyzer_state.json"
     LOG_MASK = "logs/*.log*"
 
+    def __init__(self):
+        self.logger = Logger()
+        self.rules: List[Rule] = self._compile_rules(load_detection_rules())
+        self.offsets: Dict[str, int] = {}
+        self.hit_counter: Dict[str, Dict[int, int]] = defaultdict(dict)
+        self._load_state()
+
+    def analyze(self, fmt: str = "plain") -> Iterable[str]:
+        start = time.time()
+        for finding in self._scan():
+            if fmt == "json":
+                yield json.dumps(asdict(finding), ensure_ascii=False)
+            else:
+                yield f"[{finding.rule_id}] {finding.line.strip()}"
+        self._save_state()
+        self.stats = {
+            "duration_ms": round((time.time() - start) * 1000),
+            "rules": len(self.rules),
+            "files": len(self.offsets),
+        }
+
     def _scan(self) -> Iterator[Finding]:
         for path in sorted(glob.glob(self.LOG_MASK)):
             pos = self.offsets.get(path, 0)
@@ -64,6 +85,24 @@ class LogAnalyzer:
         counter = self.hit_counter[rule.id]
         counter[bucket] = counter.get(bucket, 0) + 1
         return counter[bucket] > rule.threshold
+
+    def _compile_rules(self, raw: List[Dict]) -> List[Rule]:
+        compiled = []
+        for r in raw:
+            det = r.get("detection", {})
+            sel = det.get("selection", {})
+            neg = det.get("exclude", {})
+            compiled.append(
+                Rule(
+                    id=r.get("id", ""),
+                    title=r.get("title", ""),
+                    selectors=self._build_selectors(sel),
+                    neg_selectors=self._build_selectors(neg),
+                    threshold=int(r.get("threshold", 1)),
+                    window=int(r.get("window_sec", 0)),
+                )
+            )
+        return compiled
 
     def _build_selectors(self, block: Dict) -> List[Selector]:
         result = []
