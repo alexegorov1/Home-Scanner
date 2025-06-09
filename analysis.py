@@ -36,27 +36,6 @@ class LogAnalyzer:
     STATE_PATH = "cache/analyzer_state.json"
     LOG_MASK = "logs/*.log*"
 
-    def __init__(self):
-        self.logger = Logger()
-        self.rules: List[Rule] = self._compile_rules(load_detection_rules())
-        self.offsets: Dict[str, int] = {}
-        self.hit_counter: Dict[str, Dict[int, int]] = defaultdict(dict)
-        self._load_state()
-
-    def analyze(self, fmt: str = "plain") -> Iterable[str]:
-        start = time.time()
-        for finding in self._scan():
-            if fmt == "json":
-                yield json.dumps(asdict(finding), ensure_ascii=False)
-            else:
-                yield f"[{finding.rule_id}] {finding.line.strip()}"
-        self._save_state()
-        self.stats = {
-            "duration_ms": round((time.time() - start) * 1000),
-            "rules": len(self.rules),
-            "files": len(self.offsets),
-        }
-
     def _scan(self) -> Iterator[Finding]:
         for path in sorted(glob.glob(self.LOG_MASK)):
             pos = self.offsets.get(path, 0)
