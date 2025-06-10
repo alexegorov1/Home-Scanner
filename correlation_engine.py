@@ -16,6 +16,10 @@ class CorrelationEngine:
     def _now(self):
         return datetime.utcnow()
 
+    def _hash_event(self, event):
+        base = f"{event['type']}|{event['source']}|{event['message']}"
+        return hashlib.sha256(base.encode()).hexdigest()
+
     def ingest_event(self, event):
         timestamp = event.get("timestamp")
         if not isinstance(timestamp, datetime):
@@ -26,11 +30,21 @@ class CorrelationEngine:
         self._expire_old_events()
         self._check_patterns()
 
+    def _expire_old_events(self):
+        cutoff = self._now() - self.time_window
+        while self.events and self.events[0]["timestamp"] < cutoff:
+            self.events.popleft()
+
     def _check_patterns(self):
         for pattern_func in self.patterns:
             result = pattern_func()
             if result:
                 self.correlated_alerts.append(result)
+
+    def get_correlations(self):
+        output = self.correlated_alerts[:]
+        self.correlated_alerts.clear()
+        return output
 
     def _pattern_ransomware_like_behavior(self):
         proc_events = [e for e in self.events if e["type"] == "process"]
