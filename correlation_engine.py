@@ -41,11 +41,6 @@ class CorrelationEngine:
             if result:
                 self.correlated_alerts.append(result)
 
-    def get_correlations(self):
-        output = self.correlated_alerts[:]
-        self.correlated_alerts.clear()
-        return output
-
     def _pattern_ransomware_like_behavior(self):
         proc_events = [e for e in self.events if e["type"] == "process"]
         disk_events = [e for e in self.events if e["type"] == "disk"]
