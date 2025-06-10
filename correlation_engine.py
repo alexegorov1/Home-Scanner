@@ -26,11 +26,6 @@ class CorrelationEngine:
         self._expire_old_events()
         self._check_patterns()
 
-    def _expire_old_events(self):
-        cutoff = self._now() - self.time_window
-        while self.events and self.events[0]["timestamp"] < cutoff:
-            self.events.popleft()
-
     def _check_patterns(self):
         for pattern_func in self.patterns:
             result = pattern_func()
