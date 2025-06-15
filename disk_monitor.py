@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from core.config_loader import load_config
 
-
 class DiskMonitor:
     def __init__(self, path="/", log_file=None):
         self.path = os.path.abspath(path)
