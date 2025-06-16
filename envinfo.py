@@ -27,14 +27,6 @@ def get_env_info() -> Dict[str, str]:
         return {"error": str(e)}
 
 
-def _local_ip() -> str:
-    try:
-        with socket.create_connection(("8.8.8.8", 80), 1) as s:
-            return s.getsockname()[0]
-    except:
-        return "unknown"
-
-
 def _is_virtualized() -> str:
     if platform.system() != "Linux":
         return "no"
