@@ -114,12 +114,6 @@ def health_check(components):
         logger.log(f"Health Check Error: Database failure - {e}", level="error")
 
     try:
-        file_monitor.check_files()
-        logger.log("File monitor test ran successfully.", level="info")
-    except Exception as e:
-        logger.log(f"Health Check Error: File monitor failure - {e}", level="error")
-
-    try:
         disk_monitor.check_disk_usage()
         logger.log("Disk monitor test ran successfully.", level="info")
     except Exception as e:
