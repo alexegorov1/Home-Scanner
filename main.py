@@ -78,13 +78,6 @@ def main_loop(components):
                 alert_manager.send_alert(message)
                 db.add_incident(message, type="process", severity="warning", source="process_monitor")
 
-            modified_files = file_monitor.check_files()
-            for file in modified_files:
-                message = f"Modified file detected: {file}"
-                logger.log(message, level="warning")
-                alert_manager.send_alert(message)
-                db.add_incident(message, type="filesystem", severity="warning", source="file_monitor")
-
             disk_warnings = disk_monitor.check_disk_usage()
             for warning in disk_warnings:
                 message = f"Disk warning: {warning}"
