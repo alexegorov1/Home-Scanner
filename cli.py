@@ -48,14 +48,6 @@ class HomescannerCLI:
         else:
             print("Disk usage is within normal limits.")
 
-    def show_logs(self):
-        logs = self.logger.read_logs(lines=self.args.lines)
-        if self.args.json:
-            print(json.dumps({"logs": logs}, indent=2))
-        else:
-            for line in logs:
-                print(line.strip())
-
     def show_incidents(self):
         conn = self.db.get_connection()
         if not conn:
