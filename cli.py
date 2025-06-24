@@ -7,6 +7,8 @@ from core.analysis import LogAnalyzer
 from core.alerts import AlertManager
 from core.database import IncidentDatabase
 from monitoring.process_monitor import ProcessMonitor
+from security.file_monitor import FileMonitor
+from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
 from monitoring.user_activity_monitor import UserActivityMonitor
 from core.scanner import NetworkScanner
@@ -18,6 +20,9 @@ class HomescannerCLI:
         self.logger = Logger()
         self.scanner = NetworkScanner()
         self.analyzer = LogAnalyzer()
+        self.alert_manager = AlertManager()
+        self.db = IncidentDatabase()
+        self.process_monitor = ProcessMonitor()
         self.file_monitor = FileMonitor()
         self.disk_monitor = DiskMonitor()
         self.uptime_monitor = UptimeMonitor()
@@ -28,6 +33,10 @@ class HomescannerCLI:
             self.print_status()
         elif self.args.command == "uptime":
             self.print_uptime()
+        elif self.args.command == "disk":
+            self.check_disk()
+        elif self.args.command == "logs":
+            self.show_logs()
         elif self.args.command == "incidents":
             self.show_incidents()
         elif self.args.command == "scan":
@@ -38,6 +47,9 @@ class HomescannerCLI:
     def print_status(self):
         print("System is running. Monitors are active.")
 
+    def print_uptime(self):
+        print(self.uptime_monitor.get_uptime())
+
     def check_disk(self):
         warnings = self.disk_monitor.check_disk_usage()
         if warnings:
@@ -45,6 +57,14 @@ class HomescannerCLI:
                 print(w)
         else:
             print("Disk usage is within normal limits.")
+
+    def show_logs(self):
+        logs = self.logger.read_logs(lines=self.args.lines)
+        if self.args.json:
+            print(json.dumps({"logs": logs}, indent=2))
+        else:
+            for line in logs:
+                print(line.strip())
 
     def show_incidents(self):
         conn = self.db.get_connection()
@@ -65,6 +85,11 @@ class HomescannerCLI:
 
     async def manual_scan(self):
         results = []
+
+        threats = await self.scanner.scan()
+        for threat in threats:
+            self._report_issue("Threat detected", threat)
+            results.append(threat)
 
         anomalies = self.analyzer.analyze_logs()
         for anomaly in anomalies:
@@ -103,6 +128,7 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("status")
+    subparsers.add_parser("uptime")
     subparsers.add_parser("disk")
 
     logs_parser = subparsers.add_parser("logs")
@@ -112,6 +138,11 @@ def build_parser():
     inc_parser = subparsers.add_parser("incidents")
     inc_parser.add_argument("--count", type=int, default=5)
     inc_parser.add_argument("--json", action="store_true")
+
+    scan_parser = subparsers.add_parser("scan")
+    scan_parser.add_argument("--json", action="store_true")
+
+    return parser
 
 
 def main():
