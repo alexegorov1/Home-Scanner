@@ -114,9 +114,6 @@ def build_parser():
     inc_parser.add_argument("--count", type=int, default=5)
     inc_parser.add_argument("--json", action="store_true")
 
-    scan_parser = subparsers.add_parser("scan")
-    scan_parser.add_argument("--json", action="store_true")
-
     return parser
 
 
