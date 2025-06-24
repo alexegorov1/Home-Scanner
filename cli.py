@@ -40,9 +40,6 @@ class HomescannerCLI:
     def print_status(self):
         print("System is running. Monitors are active.")
 
-    def print_uptime(self):
-        print(self.uptime_monitor.get_uptime())
-
     def check_disk(self):
         warnings = self.disk_monitor.check_disk_usage()
         if warnings:
