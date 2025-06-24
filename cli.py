@@ -103,7 +103,6 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("status")
-    subparsers.add_parser("uptime")
     subparsers.add_parser("disk")
 
     logs_parser = subparsers.add_parser("logs")
