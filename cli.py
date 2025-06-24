@@ -66,11 +66,6 @@ class HomescannerCLI:
     async def manual_scan(self):
         results = []
 
-        threats = await self.scanner.scan()
-        for threat in threats:
-            self._report_issue("Threat detected", threat)
-            results.append(threat)
-
         anomalies = self.analyzer.analyze_logs()
         for anomaly in anomalies:
             self._report_issue("Log anomaly detected", anomaly)
