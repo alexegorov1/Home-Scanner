@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import shutil
 import logging
 from datetime import datetime
@@ -12,6 +13,8 @@ class DiskMonitor:
         config = load_config()
         self.threshold_percent = config.get("thresholds", {}).get("disk_usage_percent", 85)
         self.min_free_gb = config.get("thresholds", {}).get("disk_min_free_gb", 2)
+        self.alert_on_mount_failure = config.get("alerts", {}).get("disk_mount_failure", True)
+        self.snapshot_dir = config.get("paths", {}).get("snapshot_dir", "snapshots")
         os.makedirs(self.snapshot_dir, exist_ok=True)
         self.logger = self._setup_logger(log_file)
 
@@ -74,6 +77,14 @@ class DiskMonitor:
                 json.dump(snapshot, f, indent=2)
         except Exception as e:
             self.logger.warning(f"Failed to save snapshot: {e}")
+
+    def estimate_cleanup_needed(self, cleanup_target_gb):
+        try:
+            free_gb = shutil.disk_usage(self.path).free / 1_073_741_824
+            required = cleanup_target_gb - free_gb
+            return f"No cleanup needed. Current free: {free_gb:.2f} GB" if required <= 0 else f"Cleanup required: Free at least {required:.2f} GB to meet target {cleanup_target_gb} GB"
+        except Exception as e:
+            return f"Estimation failed: {e}"
 
     def export_status(self, output_path):
         try:
