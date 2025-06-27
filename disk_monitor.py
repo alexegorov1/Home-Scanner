@@ -13,8 +13,6 @@ class DiskMonitor:
         config = load_config()
         self.threshold_percent = config.get("thresholds", {}).get("disk_usage_percent", 85)
         self.min_free_gb = config.get("thresholds", {}).get("disk_min_free_gb", 2)
-        self.alert_on_mount_failure = config.get("alerts", {}).get("disk_mount_failure", True)
-        self.snapshot_dir = config.get("paths", {}).get("snapshot_dir", "snapshots")
         os.makedirs(self.snapshot_dir, exist_ok=True)
         self.logger = self._setup_logger(log_file)
 
