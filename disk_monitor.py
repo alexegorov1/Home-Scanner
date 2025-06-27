@@ -75,14 +75,6 @@ class DiskMonitor:
         except Exception as e:
             self.logger.warning(f"Failed to save snapshot: {e}")
 
-    def estimate_cleanup_needed(self, cleanup_target_gb):
-        try:
-            free_gb = shutil.disk_usage(self.path).free / 1_073_741_824
-            required = cleanup_target_gb - free_gb
-            return f"No cleanup needed. Current free: {free_gb:.2f} GB" if required <= 0 else f"Cleanup required: Free at least {required:.2f} GB to meet target {cleanup_target_gb} GB"
-        except Exception as e:
-            return f"Estimation failed: {e}"
-
     def export_status(self, output_path):
         try:
             total, used, free = shutil.disk_usage(self.path)
