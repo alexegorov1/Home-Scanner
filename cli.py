@@ -114,10 +114,6 @@ def build_parser():
     parser = ArgumentParser(prog="homescanner")
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("status")
-    subparsers.add_parser("uptime")
-    subparsers.add_parser("disk")
-
     logs_parser = subparsers.add_parser("logs")
     logs_parser.add_argument("--lines", type=int, default=20)
     logs_parser.add_argument("--json", action="store_true")
