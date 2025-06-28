@@ -4,6 +4,9 @@ import json
 from argparse import ArgumentParser, Namespace
 from core.logger import Logger
 from core.analysis import LogAnalyzer
+from core.alerts import AlertManager
+from core.database import IncidentDatabase
+from monitoring.process_monitor import ProcessMonitor
 from security.file_monitor import FileMonitor
 from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
@@ -17,6 +20,10 @@ class HomescannerCLI:
         self.logger = Logger()
         self.scanner = NetworkScanner()
         self.analyzer = LogAnalyzer()
+        self.alert_manager = AlertManager()
+        self.db = IncidentDatabase()
+        self.process_monitor = ProcessMonitor()
+        self.file_monitor = FileMonitor()
         self.disk_monitor = DiskMonitor()
         self.uptime_monitor = UptimeMonitor()
         self.user_monitor = UserActivityMonitor()
@@ -26,12 +33,19 @@ class HomescannerCLI:
             self.print_status()
         elif self.args.command == "uptime":
             self.print_uptime()
+        elif self.args.command == "disk":
+            self.check_disk()
         elif self.args.command == "logs":
             self.show_logs()
+        elif self.args.command == "incidents":
+            self.show_incidents()
         elif self.args.command == "scan":
             await self.manual_scan()
         else:
             print("Unknown command.")
+
+    def print_status(self):
+        print("System is running. Monitors are active.")
 
     def print_uptime(self):
         print(self.uptime_monitor.get_uptime())
@@ -113,6 +127,10 @@ def build_parser():
     parser = ArgumentParser(prog="homescanner")
     subparsers = parser.add_subparsers(dest="command")
 
+    subparsers.add_parser("status")
+    subparsers.add_parser("uptime")
+    subparsers.add_parser("disk")
+
     logs_parser = subparsers.add_parser("logs")
     logs_parser.add_argument("--lines", type=int, default=20)
     logs_parser.add_argument("--json", action="store_true")
@@ -120,6 +138,9 @@ def build_parser():
     inc_parser = subparsers.add_parser("incidents")
     inc_parser.add_argument("--count", type=int, default=5)
     inc_parser.add_argument("--json", action="store_true")
+
+    scan_parser = subparsers.add_parser("scan")
+    scan_parser.add_argument("--json", action="store_true")
 
     return parser
 
