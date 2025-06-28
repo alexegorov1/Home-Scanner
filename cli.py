@@ -34,9 +34,6 @@ class HomescannerCLI:
         else:
             print("Unknown command.")
 
-    def print_status(self):
-        print("System is running. Monitors are active.")
-
     def print_uptime(self):
         print(self.uptime_monitor.get_uptime())
 
