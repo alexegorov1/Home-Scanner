@@ -5,8 +5,6 @@ from argparse import ArgumentParser, Namespace
 from core.logger import Logger
 from core.analysis import LogAnalyzer
 from core.alerts import AlertManager
-from core.database import IncidentDatabase
-from monitoring.process_monitor import ProcessMonitor
 from security.file_monitor import FileMonitor
 from monitoring.disk_monitor import DiskMonitor
 from system.uptime_monitor import UptimeMonitor
