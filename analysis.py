@@ -24,14 +24,6 @@ class Rule:
     threshold: int
     window: int
 
-@dataclass
-class Finding:
-    rule_id: str
-    title: str
-    ts: str
-    file: str
-    line: str
-
 class LogAnalyzer:
     STATE_PATH = "cache/analyzer_state.json"
     LOG_MASK = "logs/*.log*"
