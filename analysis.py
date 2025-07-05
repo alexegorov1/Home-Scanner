@@ -94,8 +94,6 @@ class LogAnalyzer:
         result = []
         for value in block.values():
             vals = value if isinstance(value, list) else [value]
-            for v in vals:
-                v = str(v)
                 if v.startswith("/") and v.endswith("/"):
                     pat = re.compile(v.strip("/"), re.I)
                 else:
