@@ -57,6 +57,10 @@ class DiskMonitor:
             msg = f"Permission denied accessing {self.path}: {e}"
             self.logger.error(msg)
             return [msg]
+        except Exception as e:
+            msg = f"Unexpected error while checking disk: {e}"
+            self.logger.exception(msg)
+            return [msg]
 
     def _save_snapshot(self, percent_used, total_gb, used_gb, free_gb):
         snapshot = {
