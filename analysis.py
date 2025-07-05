@@ -24,6 +24,14 @@ class Rule:
     threshold: int
     window: int
 
+@dataclass
+class Finding:
+    rule_id: str
+    title: str
+    ts: str
+    file: str
+    line: str
+
 class LogAnalyzer:
     STATE_PATH = "cache/analyzer_state.json"
     LOG_MASK = "logs/*.log*"
@@ -64,6 +72,12 @@ class LogAnalyzer:
             except OSError as e:
                 self.logger.log(f"Log read error: {e}", level="error")
 
+    def _hit(self, rule: Rule, line: str) -> bool:
+        text = line.lower()
+        if rule.neg_selectors and any(sel.pattern.search(text) for sel in rule.neg_selectors):
+            return False
+        return all(sel.pattern.search(text) for sel in rule.selectors)
+
     def _over_threshold(self, rule: Rule, ts: str) -> bool:
         if not rule.window:
             return False
@@ -94,6 +108,8 @@ class LogAnalyzer:
         result = []
         for value in block.values():
             vals = value if isinstance(value, list) else [value]
+            for v in vals:
+                v = str(v)
                 if v.startswith("/") and v.endswith("/"):
                     pat = re.compile(v.strip("/"), re.I)
                 else:
