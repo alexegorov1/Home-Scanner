@@ -122,6 +122,5 @@ class LogAnalyzer:
         try:
             os.makedirs(os.path.dirname(self.STATE_PATH), exist_ok=True)
             data = {"offsets": self.offsets, "hits": self.hit_counter}
-            json.dump(data, open(self.STATE_PATH, "w", encoding="utf-8"))
         except Exception as e:
             self.logger.log(f"State save failed: {e}", level="warning")
