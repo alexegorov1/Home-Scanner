@@ -74,7 +74,6 @@ class LogAnalyzer:
         text = line.lower()
         if rule.neg_selectors and any(sel.pattern.search(text) for sel in rule.neg_selectors):
             return False
-        return all(sel.pattern.search(text) for sel in rule.selectors)
 
     def _over_threshold(self, rule: Rule, ts: str) -> bool:
         if not rule.window:
