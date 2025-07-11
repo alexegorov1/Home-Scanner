@@ -61,8 +61,6 @@ class LogAnalyzer:
                             if self._hit(rule, line) and not self._over_threshold(rule, ts):
                                 yield Finding(rule.id, rule.title, ts, path, line)
                     self.offsets[path] = f.tell()
-            except OSError as e:
-                self.logger.log(f"Log read error: {e}", level="error")
 
     def _hit(self, rule: Rule, line: str) -> bool:
         text = line.lower()
