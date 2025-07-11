@@ -115,8 +115,6 @@ class LogAnalyzer:
                 data = json.load(open(self.STATE_PATH, encoding="utf-8"))
                 self.offsets = data.get("offsets", {})
                 self.hit_counter = defaultdict(dict, {k: {int(b): c for b, c in v.items()} for k, v in data.get("hits", {}).items()})
-            except Exception:
-                self.offsets, self.hit_counter = {}, defaultdict(dict)
 
     def _save_state(self):
         try:
