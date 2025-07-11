@@ -109,12 +109,6 @@ class LogAnalyzer:
                 result.append(Selector("regex", pat))
         return result
 
-    def _load_state(self):
-        if os.path.exists(self.STATE_PATH):
-            try:
-                data = json.load(open(self.STATE_PATH, encoding="utf-8"))
-                self.offsets = data.get("offsets", {})
-                self.hit_counter = defaultdict(dict, {k: {int(b): c for b, c in v.items()} for k, v in data.get("hits", {}).items()})
 
     def _save_state(self):
         try:
