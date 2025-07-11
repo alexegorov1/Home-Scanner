@@ -24,6 +24,14 @@ class Rule:
     threshold: int
     window: int
 
+@dataclass
+class Finding:
+    rule_id: str
+    title: str
+    ts: str
+    file: str
+    line: str
+
 class LogAnalyzer:
     STATE_PATH = "cache/analyzer_state.json"
     LOG_MASK = "logs/*.log*"
@@ -61,6 +69,8 @@ class LogAnalyzer:
                             if self._hit(rule, line) and not self._over_threshold(rule, ts):
                                 yield Finding(rule.id, rule.title, ts, path, line)
                     self.offsets[path] = f.tell()
+            except OSError as e:
+                self.logger.log(f"Log read error: {e}", level="error")
 
     def _hit(self, rule: Rule, line: str) -> bool:
         text = line.lower()
@@ -107,6 +117,14 @@ class LogAnalyzer:
                 result.append(Selector("regex", pat))
         return result
 
+    def _load_state(self):
+        if os.path.exists(self.STATE_PATH):
+            try:
+                data = json.load(open(self.STATE_PATH, encoding="utf-8"))
+                self.offsets = data.get("offsets", {})
+                self.hit_counter = defaultdict(dict, {k: {int(b): c for b, c in v.items()} for k, v in data.get("hits", {}).items()})
+            except Exception:
+                self.offsets, self.hit_counter = {}, defaultdict(dict)
 
     def _save_state(self):
         try:
