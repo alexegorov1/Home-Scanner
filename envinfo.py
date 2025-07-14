@@ -12,7 +12,6 @@ def get_env_info() -> Dict[str, str]:
             "release": platform.release(),
             "version": platform.version(),
             "arch": platform.machine(),
-            "hostname": platform.node(),
             "ip": _local_ip(),
             "term": os.environ.get("TERM", "unknown"),
             "disk_gb": _disk_gb(),
