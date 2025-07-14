@@ -17,8 +17,6 @@ def get_env_info() -> Dict[str, str]:
             "ip": _local_ip(),
             "cpus": str(multiprocessing.cpu_count()),
             "cwd": os.getcwd(),
-            "virtualized": _is_virtualized(),
-            "shell": os.environ.get("SHELL", "unknown"),
             "term": os.environ.get("TERM", "unknown"),
             "disk_gb": _disk_gb(),
             "python": platform.python_version()
