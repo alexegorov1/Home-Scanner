@@ -28,7 +28,6 @@ def _local_ip() -> str:
     except:
         return "unknown"
 
-
 def _is_virtualized() -> str:
     if platform.system() != "Linux":
         return "no"
