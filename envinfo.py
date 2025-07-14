@@ -40,9 +40,6 @@ def _is_virtualized() -> str:
             if any(x in txt for x in ("hypervisor", "kvm", "vmware", "xen", "qemu", "vbox")):
                 return "yes"
         return "no"
-    except:
-        return "unknown"
-
 
 def _disk_gb() -> str:
     try:
