@@ -38,8 +38,6 @@ class IncidentDatabase:
             logging.exception(f"[DB INIT] Schema initialization failed: {e}")
             raise RuntimeError("Failed to initialize database schema")
 
-    def _connect(self):
-        return sqlite3.connect(self.db_file, detect_types=sqlite3.PARSE_DECLTYPES)
 
     def add_incident(self, description, type="generic", severity="info", source="unknown"):
         if not isinstance(description, str) or not description.strip():
