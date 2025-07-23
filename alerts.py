@@ -2,7 +2,9 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from core.config_loader import load_config
 from socket import gaierror, timeout
+from datetime import datetime
 
 class AlertManager:
     def __init__(self):
@@ -14,6 +16,7 @@ class AlertManager:
         self.smtp_server = smtp.get("server", "")
         self.smtp_port = smtp.get("port", 587)
         self.smtp_user = smtp.get("user", "")
+        self.smtp_password = smtp.get("password", "")
         self.use_tls = smtp.get("use_tls", True)
 
         self.enabled = all([self.smtp_server, self.smtp_port, self.smtp_user, self.smtp_password, self.email_to])
@@ -21,6 +24,7 @@ class AlertManager:
         self.logger = logging.getLogger("AlertManager")
         if not self.logger.hasHandlers():
             handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"))
             self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO)
 
@@ -28,7 +32,7 @@ class AlertManager:
         if not message:
             self.logger.error("Skipped sending alert: message was empty.")
             return
-        
+
         entry = f"[{severity.upper()}] {source} - {message}"
         self.logger.warning(entry)
 
@@ -40,13 +44,16 @@ class AlertManager:
 
     def _send_email(self, subject, body):
         msg = MIMEMultipart()
+        msg["From"] = self.email_from
         msg["To"] = self.email_to
+        msg["Subject"] = subject
         msg.attach(MIMEText(
             f"Timestamp: {datetime.utcnow().isoformat(sep=' ', timespec='seconds')} UTC\n\n{body}", "plain"
         ))
 
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as smtp:
-
+                if self.use_tls:
+                    smtp.starttls()
                 smtp.login(self.smtp_user, self.smtp_password)
                 smtp.send_message(msg)
