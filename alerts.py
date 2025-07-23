@@ -52,7 +52,6 @@ class AlertManager:
 
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as smtp:
-                if self.use_tls:
-                    smtp.starttls()
+
                 smtp.login(self.smtp_user, self.smtp_password)
                 smtp.send_message(msg)
