@@ -21,7 +21,6 @@ class Rule:
     title: str
     selectors: List[Selector]
     neg_selectors: List[Selector]
-    threshold: int
     window: int
 
 @dataclass
