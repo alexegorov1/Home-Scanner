@@ -106,7 +106,7 @@ class LogAnalyzer:
         for value in block.values():
             vals = value if isinstance(value, list) else [value]
             for v in vals:
-                v = str(v)
+
 
     def _load_state(self):
         if os.path.exists(self.STATE_PATH):
