@@ -14,7 +14,6 @@ from core.config_loader import load_detection_rules
 class Selector:
     op: str
     pattern: re.Pattern
-
 @dataclass
 class Rule:
     id: str
