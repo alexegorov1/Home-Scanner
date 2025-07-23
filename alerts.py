@@ -32,7 +32,6 @@ class AlertManager:
         if not message:
             self.logger.error("Skipped sending alert: message was empty.")
             return
-
         
         entry = f"[{severity.upper()}] {source} - {message}"
         self.logger.warning(entry)
