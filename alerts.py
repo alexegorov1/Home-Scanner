@@ -46,7 +46,6 @@ class AlertManager:
         msg = MIMEMultipart()
         msg["From"] = self.email_from
         msg["To"] = self.email_to
-        msg["Subject"] = subject
         msg.attach(MIMEText(
             f"Timestamp: {datetime.utcnow().isoformat(sep=' ', timespec='seconds')} UTC\n\n{body}", "plain"
         ))
