@@ -96,8 +96,6 @@ class LogAnalyzer:
                     id=r.get("id", ""),
                     title=r.get("title", ""),
                     selectors=self._build_selectors(sel),
-                    neg_selectors=self._build_selectors(neg),
-                    threshold=int(r.get("threshold", 1)),
                     window=int(r.get("window_sec", 0)),
                 )
             )
