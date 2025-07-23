@@ -107,12 +107,6 @@ class LogAnalyzer:
             vals = value if isinstance(value, list) else [value]
             for v in vals:
                 v = str(v)
-                if v.startswith("/") and v.endswith("/"):
-                    pat = re.compile(v.strip("/"), re.I)
-                else:
-                    pat = re.compile(re.escape(v), re.I)
-                result.append(Selector("regex", pat))
-        return result
 
     def _load_state(self):
         if os.path.exists(self.STATE_PATH):
