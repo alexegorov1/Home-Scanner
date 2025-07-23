@@ -21,7 +21,6 @@ class AlertManager:
         self.logger = logging.getLogger("AlertManager")
         if not self.logger.hasHandlers():
             handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"))
             self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO)
 
