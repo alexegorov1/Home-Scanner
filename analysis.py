@@ -14,12 +14,14 @@ from core.config_loader import load_detection_rules
 class Selector:
     op: str
     pattern: re.Pattern
+
 @dataclass
 class Rule:
     id: str
     title: str
     selectors: List[Selector]
     neg_selectors: List[Selector]
+    threshold: int
     window: int
 
 @dataclass
@@ -95,6 +97,8 @@ class LogAnalyzer:
                     id=r.get("id", ""),
                     title=r.get("title", ""),
                     selectors=self._build_selectors(sel),
+                    neg_selectors=self._build_selectors(neg),
+                    threshold=int(r.get("threshold", 1)),
                     window=int(r.get("window_sec", 0)),
                 )
             )
@@ -105,7 +109,13 @@ class LogAnalyzer:
         for value in block.values():
             vals = value if isinstance(value, list) else [value]
             for v in vals:
-
+                v = str(v)
+                if v.startswith("/") and v.endswith("/"):
+                    pat = re.compile(v.strip("/"), re.I)
+                else:
+                    pat = re.compile(re.escape(v), re.I)
+                result.append(Selector("regex", pat))
+        return result
 
     def _load_state(self):
         if os.path.exists(self.STATE_PATH):
@@ -113,6 +123,8 @@ class LogAnalyzer:
                 data = json.load(open(self.STATE_PATH, encoding="utf-8"))
                 self.offsets = data.get("offsets", {})
                 self.hit_counter = defaultdict(dict, {k: {int(b): c for b, c in v.items()} for k, v in data.get("hits", {}).items()})
+            except Exception:
+                self.offsets, self.hit_counter = {}, defaultdict(dict)
 
     def _save_state(self):
         try:
