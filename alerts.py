@@ -3,7 +3,6 @@ import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from socket import gaierror, timeout
-from datetime import datetime
 
 class AlertManager:
     def __init__(self):
