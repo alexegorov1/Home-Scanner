@@ -40,7 +40,6 @@ class AlertManager:
             self.logger.warning("Skipped sending alert: SMTP config incomplete or disabled.")
             return
 
-        self._send_email(f"[{severity.upper()}] {source}", message)
 
     def _send_email(self, subject, body):
         msg = MIMEMultipart()
