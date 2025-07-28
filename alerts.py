@@ -32,8 +32,6 @@ class AlertManager:
             self.logger.error("Skipped sending alert: message was empty.")
             return
 
-        entry = f"[{severity.upper()}] {source} - {message}"
-        self.logger.warning(entry)
 
         if not self.enabled:
             self.logger.warning("Skipped sending alert: SMTP config incomplete or disabled.")
